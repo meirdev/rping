@@ -1,0 +1,191 @@
+
+use pnet::datalink::{self, NetworkInterface};
+use pnet::packet::PacketSize;
+use pnet::packet::ethernet::MutableEthernetPacket;
+use pnet::packet::ip::IpNextHeaderProtocols;
+use pnet::packet::ipv4::{checksum, MutableIpv4Packet};
+use pnet::packet::tcp::{ipv4_checksum, MutableTcpPacket, Tcp, TcpFlags, TcpOption, TcpPacket};
+use pnet::packet::{Packet, ipv4};
+use std::fs::File;
+use std::net::Ipv4Addr;
+use pnet::datalink::Channel::Ethernet;
+use pnet::packet::MutablePacket;
+use pnet::transport::transport_channel;
+use pnet::transport::TransportChannelType::Layer3;
+
+
+// Invoke as echo <interface name>
+fn main() {
+    const ETHR_HEADER_LEN: usize = 14;
+    const IPV4_HEADER_LEN: usize = 20;
+    const TCP_HEADER_LEN: usize = 32;
+    const TEST_DATA_LEN: usize = 4;
+
+    let mut packet = [0u8;  IPV4_HEADER_LEN + TCP_HEADER_LEN + TEST_DATA_LEN];
+
+    let ipv4_source = Ipv4Addr::new(192, 168, 2, 1);
+    let ipv4_destination = Ipv4Addr::new(192, 168, 111, 51);
+    {
+        let mut ip_header = MutableIpv4Packet::new(&mut packet[..]).unwrap();
+        ip_header.set_next_level_protocol(IpNextHeaderProtocols::Tcp);
+        ip_header.set_source(ipv4_source);
+        ip_header.set_destination(ipv4_destination);
+        ip_header.set_version(4);
+        ip_header.set_header_length(IPV4_HEADER_LEN as u8 / 4);
+        ip_header.set_total_length((IPV4_HEADER_LEN + TCP_HEADER_LEN + TEST_DATA_LEN) as u16);
+        ip_header.set_identification(0x1234);
+        ip_header.set_flags(0);
+    }
+
+    // Set data
+    packet[ IPV4_HEADER_LEN + TCP_HEADER_LEN] = 't' as u8;
+    packet[ IPV4_HEADER_LEN + TCP_HEADER_LEN + 1] = 'e' as u8;
+    packet[ IPV4_HEADER_LEN + TCP_HEADER_LEN + 2] = 's' as u8;
+    packet[ IPV4_HEADER_LEN + TCP_HEADER_LEN + 3] = 't' as u8;
+
+    {
+        let mut tcp_header = MutableTcpPacket::new(&mut packet[ IPV4_HEADER_LEN..]).unwrap();
+        tcp_header.set_source(49511);
+
+        tcp_header.set_destination(9000);
+
+        tcp_header.set_sequence(0x9037d2b8);
+
+        tcp_header.set_acknowledgement(0x944bb276);
+
+        tcp_header.set_flags(TcpFlags::PSH | TcpFlags::ACK);
+
+        tcp_header.set_window(4015);
+
+        tcp_header.set_data_offset(8);
+
+        let ts = TcpOption::timestamp(743951781, 44056978);
+        tcp_header.set_options(&vec![TcpOption::nop(), TcpOption::nop(), ts]);
+
+        let checksum = ipv4_checksum(&tcp_header.to_immutable(), &ipv4_source, &ipv4_destination);
+        tcp_header.set_checksum(checksum);
+    }
+
+    let interface_name = "en0";
+    let interface_names_match =
+        |iface: &NetworkInterface| iface.name == interface_name;
+
+    // // Find the network interface with the provided name
+    let interfaces = datalink::interfaces();
+    let interface = interfaces.into_iter()
+                              .filter(interface_names_match)
+                              .next()
+                              .unwrap();
+
+    println!("Using interface: {:?}", interface.mac);
+
+    // // Create a new channel, dealing with layer 2 packets
+    let (mut tx, mut rx) = match transport_channel(100, Layer3(IpNextHeaderProtocols::Tcp)) {
+        Ok((tx, rx)) => (tx, rx),
+        Err(e) => panic!("An error occurred when creating the datalink channel: {}", e)
+    };
+
+    {
+        let mut ip_header = MutableIpv4Packet::new(&mut packet[..]).unwrap();
+    let checksum = checksum(&ip_header.to_immutable());
+    ip_header.set_checksum(checksum);
+    }
+
+    {
+        let mut tcp_header = MutableTcpPacket::new(&mut packet[ IPV4_HEADER_LEN..]).unwrap();
+    let checksum = ipv4_checksum(&tcp_header.to_immutable(), &ipv4_source, &ipv4_destination);
+    tcp_header.set_checksum(checksum);
+    }
+
+    let ip_header = MutableIpv4Packet::new(&mut packet[..]).unwrap();
+
+    println!("Sending packet: {:#?}", ip_header);
+
+    tx.send_to(&ip_header, std::net::IpAddr::V4(ipv4_destination)).expect("Failed to send packet");
+
+}
+
+
+
+
+
+
+
+
+
+extern crate pnet;
+
+use pnet::datalink::{self, NetworkInterface};
+use pnet::datalink::Channel::Ethernet;
+use pnet::packet::{Packet, MutablePacket};
+use pnet::packet::ethernet::{EthernetPacket, MutableEthernetPacket};
+use pnet::util::MacAddr;
+
+use std::env;
+
+// Invoke as echo <interface name>
+fn main() {
+    let interface_name = env::args().nth(1).unwrap();
+    let interface_names_match =
+        |iface: &NetworkInterface| iface.name == interface_name;
+
+    // Find the network interface with the provided name
+    let interfaces = datalink::interfaces();
+    let interface = interfaces.into_iter()
+                              .filter(interface_names_match)
+                              .next()
+                              .unwrap();
+
+    
+
+    let mut packet = [0u8;  60];
+
+    let mut eth_mut = MutableEthernetPacket::new(&mut packet).unwrap();
+    eth_mut.set_source(interface.mac.unwrap());
+    eth_mut.set_destination(MacAddr::broadcast());
+    eth_mut.set_ethertype(pnet::packet::ethernet::EtherTypes::Arp);
+
+    let mut arp_request = pnet::packet::arp::MutableArpPacket::new(eth_mut.payload_mut()).unwrap();
+    arp_request.set_protocol_type(pnet::packet::ethernet::EtherTypes::Ipv4);
+    arp_request.set_hardware_type(pnet::packet::arp::ArpHardwareTypes::Ethernet);
+    arp_request.set_operation(pnet::packet::arp::ArpOperations::Request);
+    arp_request.set_sender_hw_addr(interface.mac.unwrap());
+    arp_request.set_sender_proto_addr(std::net::Ipv4Addr::new(0, 0, 0, 0));
+    arp_request.set_target_hw_addr(MacAddr::zero());
+    arp_request.set_target_proto_addr(std::net::Ipv4Addr::new(8, 8, 8, 8));
+
+    println!("Sending ARP request on interface: {}", interface.name);
+    println!("ARP Request: {:?}", arp_request);
+    
+    // Create a new channel, dealing with layer 2 packets
+    let (mut tx, mut rx) = match datalink::channel(&interface, Default::default()) {
+        Ok(Ethernet(tx, rx)) => (tx, rx),
+        Ok(_) => panic!("Unhandled channel type"),
+        Err(e) => panic!("An error occurred when creating the datalink channel: {}", e)
+    };
+
+    // Send the ARP request
+    let res = tx.send_to(&packet, None).unwrap();
+
+    println!("Sent {:#?} bytes", res);
+
+    loop {
+        match rx.next() {
+            Ok(packet) => {
+                let eth_packet = EthernetPacket::new(packet).unwrap();
+                if eth_packet.get_ethertype() == pnet::packet::ethernet::EtherTypes::Arp {
+                    let arp_packet = pnet::packet::arp::ArpPacket::new(eth_packet.payload()).unwrap();
+                    if arp_packet.get_operation() == pnet::packet::arp::ArpOperations::Reply {
+                        println!("Received ARP reply: {:?}", arp_packet);
+                        break;
+                    }
+                }
+            },
+            Err(e) => {
+                eprintln!("An error occurred while receiving packets: {}", e);
+                break;
+            }
+        }
+    }
+
+}
