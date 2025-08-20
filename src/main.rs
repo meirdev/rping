@@ -18,7 +18,7 @@ fn main() {
 
     println!("Using interface: {}", interface.name);
 
-    build_ipv4_packet(args.protocol)
+    build_ipv4_packet(args)
         .unwrap_or_else(|err| {
             eprintln!("Error building packet: {}", err);
             std::process::exit(1);
