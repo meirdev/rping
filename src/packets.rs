@@ -70,7 +70,8 @@ fn random_data_size(rng: &mut rand::prelude::ThreadRng, arg: &Option<ArgData>) -
 
 pub fn build_ipv4_packet(c: Cli) -> Result<(), String> {
     let mut rng: rand::prelude::ThreadRng = rand::rng();
-    let mut packet = [0u8; 1500];
+
+    let mut packet = [0u8; 4096];
 
     let (mut tx, mut rx) = match transport_channel(100, Layer3(IpNextHeaderProtocols::Tcp)) {
         Ok((tx, rx)) => (tx, rx),
@@ -79,6 +80,8 @@ pub fn build_ipv4_packet(c: Cli) -> Result<(), String> {
             e
         ),
     };
+
+    let mut count = 1;
 
     loop {
         let data_size = random_data_size(&mut rng, &c.data);
@@ -173,6 +176,12 @@ pub fn build_ipv4_packet(c: Cli) -> Result<(), String> {
 
             tx.send_to(&ip_header, std::net::IpAddr::V4(dst_ip))
                 .expect("Failed to send packet");
+
+            count += 1;
+        }
+
+        if count % 1000000 == 0 {
+            println!("Sent {} packets", count);
         }
     }
 

@@ -1,8 +1,9 @@
-use clap::Parser;
-use ipnet::Ipv4Net;
 use std::{net::Ipv4Addr, str::FromStr};
 
-#[derive(Parser, Debug)]
+use clap::Parser;
+use ipnet::Ipv4Net;
+
+#[derive(Parser, Debug, Clone)]
 #[command(version)]
 pub struct Cli {
     #[arg(short = 'I', long, help = "Network interface to use")]
@@ -18,11 +19,7 @@ pub struct Cli {
     )]
     pub flood: bool,
 
-    #[arg(
-        short = 'c',
-        long,
-        help = "Number of packets to send"
-    )]
+    #[arg(short = 'c', long, help = "Number of packets to send")]
     pub count: Option<u32>,
 
     #[arg(long, num_args = 0.., value_delimiter = ',', help = "Destination IP address or network (e.g.: 10.0.0.0/8, 10.0.1.15)")]
@@ -46,7 +43,10 @@ pub struct Cli {
     #[arg(long, group = "protocol", help = "RAW IP mode")]
     pub rawip: bool,
 
-    #[arg(long, help = "Protocol number for raw IP packets (e.g., 6 for TCP, 17 for UDP)")]
+    #[arg(
+        long,
+        help = "Protocol number for raw IP packets (e.g., 6 for TCP, 17 for UDP)"
+    )]
     pub proto: Option<u8>,
 
     #[arg(long, num_args = 0.., value_delimiter = ',', help = "Destination port or port range (e.g.: 80, 1000-2000)")]
@@ -89,12 +89,7 @@ pub struct Cli {
     )]
     pub ymas: bool,
 
-    #[arg(
-        short = 'w',
-        long,
-        default_value_t = 64,
-        help = "Set TCP window size"
-    )]
+    #[arg(short = 'w', long, default_value_t = 64, help = "Set TCP window size")]
     pub window: u16,
 
     #[arg(long, help = "Set TCP sequence number")]
@@ -157,7 +152,9 @@ impl FromStr for ArgData {
             let range = parse_range::<u16>(s, None, None)?;
             Ok(ArgData::Range(range))
         } else {
-            let data_size = s.parse::<u16>().map_err(|_| "Invalid data size".to_string())?;
+            let data_size = s
+                .parse::<u16>()
+                .map_err(|_| "Invalid data size".to_string())?;
             Ok(ArgData::Single(data_size))
         }
     }
