@@ -2,7 +2,7 @@ use std::thread;
 
 use clap::Parser;
 use pnet::datalink;
-use rping::{args::Cli, packets::build_ipv4_packet};
+use rping::{cli::Cli, packet::build_ipv4_packet};
 
 fn main() {
     let args = Cli::parse();
@@ -18,26 +18,29 @@ fn main() {
         })
         .unwrap();
 
+    println!("Options: {:?}", args);
+
     println!("Using interface: {}", interface.name);
 
-    let mut threads = Vec::new();
+    if let Some(num_threads) = args.threads {
+        println!("Using {} threads", num_threads);
 
-    for _ in 0..10 {
-        println!("Building packet...");
-        let args2 = args.clone();
-        let t = thread::spawn(move || {
-            build_ipv4_packet(args2).unwrap_or_else(|err| {
-                eprintln!("Error building packet: {}", err);
-                std::process::exit(1);
-            })
-        });
+        let mut threads = Vec::new();
 
-        threads.push(t);
-    }
-
-    for t in threads {
-        if let Err(e) = t.join() {
-            eprintln!("Thread panicked: {:?}", e);
+        for _ in 0..num_threads {
+            let args_clone = args.clone();
+            let t = thread::spawn(move || {
+                build_ipv4_packet(args_clone);
+            });
+            threads.push(t);
         }
+
+        threads.into_iter().for_each(|t| {
+            if let Err(e) = t.join() {
+                eprintln!("Thread panicked: {:?}", e);
+            }
+        });
+    } else {
+        build_ipv4_packet(args);
     }
 }
