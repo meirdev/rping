@@ -3,7 +3,7 @@ use std::net::Ipv4Addr;
 use ipnet::Ipv4Net;
 use rand::Rng;
 
-pub fn random_public_ipv4(rng: &mut rand::prelude::ThreadRng) -> Ipv4Addr {
+pub fn random_public_ipv4(rng: &mut rand::prelude::StdRng) -> Ipv4Addr {
     loop {
         let ip: Ipv4Addr = rng.random_range(0..=0xFFFFFFFF).into();
 
@@ -13,7 +13,7 @@ pub fn random_public_ipv4(rng: &mut rand::prelude::ThreadRng) -> Ipv4Addr {
     }
 }
 
-pub fn random_ipv4(rng: &mut rand::prelude::ThreadRng, ipv4net: &Ipv4Net) -> Ipv4Addr {
+pub fn random_ipv4(rng: &mut rand::prelude::StdRng, ipv4net: &Ipv4Net) -> Ipv4Addr {
     let start = ipv4net.network();
     let end = ipv4net.broadcast();
 

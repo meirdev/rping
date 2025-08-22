@@ -7,6 +7,8 @@ use pnet::packet::tcp::{MutableTcpPacket, TcpFlags};
 use pnet::packet::udp::MutableUdpPacket;
 use pnet::transport::TransportChannelType::Layer3;
 use pnet::transport::transport_channel;
+use rand::SeedableRng;
+use rand::rngs::StdRng;
 use rand::{Rng, seq::IndexedRandom};
 
 use crate::checksum::{tcp_ipv4_checksum, udp_ipv4_checksum};
@@ -39,7 +41,7 @@ pub fn build_ipv4_packet(cli: Cli) {
         _ => IP_HEADER_SIZE,
     };
 
-    let mut rng: rand::prelude::ThreadRng = rand::rng();
+    let mut rng = StdRng::from_rng(&mut rand::rng());
 
     let mut packet = [0u8; MAX_PACKET_SIZE as usize];
 
