@@ -3,12 +3,13 @@ use std::thread;
 use log::debug;
 use pnet::packet::ip::{IpNextHeaderProtocol, IpNextHeaderProtocols};
 use pnet::packet::ipv4::{MutableIpv4Packet, checksum};
-use pnet::packet::tcp::{MutableTcpPacket, TcpFlags, ipv4_checksum as tcp_ipv4_checksum};
-use pnet::packet::udp::{MutableUdpPacket, ipv4_checksum as udp_ipv4_checksum};
+use pnet::packet::tcp::{MutableTcpPacket, TcpFlags};
+use pnet::packet::udp::MutableUdpPacket;
 use pnet::transport::TransportChannelType::Layer3;
 use pnet::transport::transport_channel;
 use rand::{Rng, seq::IndexedRandom};
 
+use crate::checksum::{tcp_ipv4_checksum, udp_ipv4_checksum};
 use crate::cli::Cli;
 use crate::ip::Ip;
 use crate::random::{random_ipv4, random_public_ipv4};
@@ -177,6 +178,8 @@ pub fn build_ipv4_packet(cli: Cli) {
                     tcp_header.set_window(cli.window);
                     tcp_header.set_data_offset(5);
 
+                    tcp_header.set_checksum(0);
+
                     let checksum = tcp_ipv4_checksum(&tcp_header.to_immutable(), &src_ip, &dst_ip);
                     tcp_header.set_checksum(checksum);
                 } else if proto == IpNextHeaderProtocols::Udp {
@@ -187,6 +190,8 @@ pub fn build_ipv4_packet(cli: Cli) {
                     udp_header.set_destination(dst_port);
 
                     udp_header.set_length(UDP_HEADER_SIZE + data_size as u16);
+
+                    udp_header.set_checksum(0);
 
                     let checksum = udp_ipv4_checksum(&udp_header.to_immutable(), &src_ip, &dst_ip);
                     udp_header.set_checksum(checksum);
