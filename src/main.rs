@@ -1,10 +1,13 @@
 use std::thread;
 
 use clap::Parser;
+use log::debug;
 use pnet::datalink;
 use rping::{cli::Cli, packet::build_ipv4_packet};
 
 fn main() {
+    env_logger::init();
+
     let args = Cli::parse();
 
     let interfaces = datalink::interfaces();
@@ -18,7 +21,7 @@ fn main() {
         })
         .unwrap();
 
-    println!("Options: {:?}", args);
+    debug!("Options: {:?}", args);
 
     println!("Using interface: {}", interface.name);
 

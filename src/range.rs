@@ -3,14 +3,6 @@ use std::str::FromStr;
 fn parse_range<T: std::str::FromStr + std::cmp::PartialOrd + std::fmt::Display + Copy>(
     input: &str,
 ) -> Result<std::ops::RangeInclusive<T>, String> {
-    if !input.contains('-') {
-        let value = input
-            .parse::<T>()
-            .map_err(|_| "Invalid value".to_string())?;
-
-        return Ok(value..=value);
-    }
-
     let parts: Vec<&str> = input.split('-').collect();
     if parts.len() != 2 {
         return Err("Invalid range format. Use 'start-end'.".to_string());
@@ -31,14 +23,23 @@ fn parse_range<T: std::str::FromStr + std::cmp::PartialOrd + std::fmt::Display +
 }
 
 #[derive(Debug, Clone)]
-pub struct Range<T>(pub std::ops::RangeInclusive<T>);
+pub enum Range<T> {
+    Single(T),
+    Range(std::ops::RangeInclusive<T>),
+}
 
 impl<T: std::str::FromStr + std::cmp::PartialOrd + std::fmt::Display + Copy> FromStr for Range<T> {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let value = parse_range::<T>(s)?;
-
-        Ok(Range(value))
+        if s.contains('-') {
+            parse_range::<T>(s)
+                .map(Range::Range)
+                .map_err(|e| e.to_string())
+        } else {
+            T::from_str(s)
+                .map(Range::Single)
+                .map_err(|_| "Invalid value".to_string())
+        }
     }
 }

@@ -1,6 +1,6 @@
 use clap::Parser;
-use ipnet::Ipv4Net;
 
+use crate::ip::Ip;
 use crate::range::Range;
 
 #[derive(Parser, Debug, Clone)]
@@ -22,17 +22,20 @@ pub struct Cli {
     #[arg(short = 't', long, help = "Number of threads to use")]
     pub threads: Option<usize>,
 
-    #[arg(short = 'c', long, help = "Number of packets to send")]
+    #[arg(short = 'c', long, help = "Number of packets to send (per thread)")]
     pub count: Option<u32>,
 
     #[arg(long, num_args = 0.., value_delimiter = ',', help = "Destination IP address or network (e.g.: 10.0.0.0/8, 10.0.1.15)")]
-    pub dst_ip: Option<Vec<Ipv4Net>>,
+    pub dst_ip: Option<Vec<Ip>>,
 
     #[arg(long, num_args = 0.., value_delimiter = ',', help = "Source IP address or network (e.g.: 10.0.0.0/8, 10.0.1.15)")]
-    pub src_ip: Option<Vec<Ipv4Net>>,
+    pub src_ip: Option<Vec<Ip>>,
 
     #[arg(short = 't', long, default_value_t = 64, help = "Time to live (TTL)")]
     pub ttl: u8,
+
+    #[arg(long, help = "IP id")]
+    pub id: Option<u16>,
 
     #[arg(long, group = "protocol", help = "TCP mode")]
     pub tcp: bool,
