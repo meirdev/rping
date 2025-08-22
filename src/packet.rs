@@ -45,6 +45,8 @@ pub fn build_ipv4_packet(cli: Cli) {
 
     let mut packet = [0u8; MAX_PACKET_SIZE as usize];
 
+    packet.split_at_mut(header_size as usize).1.fill('X' as u8);
+
     let mut count = 0;
 
     match transport_channel(0, Layer3(proto)) {
@@ -99,8 +101,6 @@ pub fn build_ipv4_packet(cli: Cli) {
                 ip_header.set_identification(rng.random());
                 ip_header.set_ttl(cli.ttl);
             }
-
-            packet.split_at_mut(header_size as usize).1.fill('X' as u8);
 
             if proto == IpNextHeaderProtocols::Tcp || proto == IpNextHeaderProtocols::Udp {
                 let src_port = cli
