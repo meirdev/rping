@@ -1,8 +1,14 @@
+use std::fmt::Display;
+use std::ops::RangeInclusive;
 use std::str::FromStr;
 
-fn parse_range<T: std::str::FromStr + std::cmp::PartialOrd + std::fmt::Display + Copy>(
+use rand::Rng;
+use rand::distr::uniform::SampleUniform;
+use rand::rngs::StdRng;
+
+fn parse_range<T: FromStr + PartialOrd + Display + Copy + Clone + SampleUniform>(
     input: &str,
-) -> Result<std::ops::RangeInclusive<T>, String> {
+) -> Result<RangeInclusive<T>, String> {
     let parts: Vec<&str> = input.split('-').collect();
     if parts.len() != 2 {
         return Err("Invalid range format. Use 'start-end'.".to_string());
@@ -23,22 +29,29 @@ fn parse_range<T: std::str::FromStr + std::cmp::PartialOrd + std::fmt::Display +
 }
 
 #[derive(Debug, Clone)]
-pub enum Range<T> {
-    Single(T),
-    Range(std::ops::RangeInclusive<T>),
+pub struct Range<T>(pub RangeInclusive<T>);
+
+impl<T: FromStr + PartialOrd + Display + Copy + Clone + SampleUniform> Range<T> {
+    pub fn new(start: T, end: T) -> Self {
+        Range(start..=end)
+    }
+
+    pub fn get_random_value(&self, rng: &mut StdRng) -> T {
+        rng.random_range(self.0.start().clone()..=self.0.end().clone())
+    }
 }
 
-impl<T: std::str::FromStr + std::cmp::PartialOrd + std::fmt::Display + Copy> FromStr for Range<T> {
+impl<T: FromStr + PartialOrd + Display + Copy + Clone + SampleUniform> FromStr for Range<T> {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.contains('-') {
             parse_range::<T>(s)
-                .map(Range::Range)
+                .map(|i| Range(i))
                 .map_err(|e| e.to_string())
         } else {
             T::from_str(s)
-                .map(Range::Single)
+                .map(|i| Range(i..=i))
                 .map_err(|_| "Invalid value".to_string())
         }
     }

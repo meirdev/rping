@@ -1,21 +1,24 @@
+use std::net::Ipv4Addr;
 use std::thread;
 
 use log::debug;
-use pnet::packet::ip::{IpNextHeaderProtocol, IpNextHeaderProtocols};
-use pnet::packet::ipv4::{MutableIpv4Packet, checksum};
-use pnet::packet::tcp::{MutableTcpPacket, TcpFlags};
+use pnet::packet::ip::IpNextHeaderProtocol;
+use pnet::packet::ip::IpNextHeaderProtocols;
+use pnet::packet::ipv4::MutableIpv4Packet;
+use pnet::packet::ipv4::checksum;
+use pnet::packet::tcp::MutableTcpPacket;
+use pnet::packet::tcp::TcpFlags;
 use pnet::packet::udp::MutableUdpPacket;
 use pnet::transport::TransportChannelType::Layer3;
 use pnet::transport::transport_channel;
+use rand::Rng;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
-use rand::{Rng, seq::IndexedRandom};
 
-use crate::checksum::{tcp_ipv4_checksum, udp_ipv4_checksum};
+use crate::checksum::tcp_ipv4_checksum;
+use crate::checksum::udp_ipv4_checksum;
 use crate::cli::Cli;
-use crate::ip::Ip;
-use crate::random::{random_ipv4, random_public_ipv4};
-use crate::range::Range;
+use crate::random::random_public_ipv4;
 
 const MAX_PACKET_SIZE: u16 = u16::MAX;
 
@@ -51,40 +54,30 @@ pub fn build_ipv4_packet(cli: Cli) {
 
     match transport_channel(0, Layer3(proto)) {
         Ok((mut tx, _)) => loop {
-            let data_size = match cli.data {
-                Some(Range::Single(value)) => value,
-                Some(Range::Range(ref range)) => rng.random_range(range.clone()),
-                None => 0,
-            };
+            let data_size = cli
+                .data
+                .as_ref()
+                .map(|i| i.get_random_value(&mut rng))
+                .unwrap_or(0);
 
             let src_ip = cli
                 .src_ip
                 .as_ref()
-                .map(|ips| {
-                    ips.choose(&mut rng)
-                        .map(|net| match net {
-                            Ip::Address(addr) => addr.clone(),
-                            Ip::Network(net) => random_ipv4(&mut rng, net),
-                        })
-                        .unwrap()
-                })
+                .map(|i| i.0.get_random_value(&mut rng))
+                .map(|i| Ipv4Addr::from(i))
                 .unwrap_or_else(|| random_public_ipv4(&mut rng));
 
             let dst_ip = cli
                 .dst_ip
                 .as_ref()
-                .map(|ips| {
-                    ips.choose(&mut rng)
-                        .map(|net| match net {
-                            Ip::Address(addr) => addr.clone(),
-                            Ip::Network(net) => random_ipv4(&mut rng, net),
-                        })
-                        .unwrap()
-                })
+                .map(|i| i.0.get_random_value(&mut rng))
+                .map(|i| Ipv4Addr::from(i))
                 .unwrap_or_else(|| random_public_ipv4(&mut rng));
 
+            let packet_size = (header_size + data_size) as usize;
+
             {
-                let mut ip_header = MutableIpv4Packet::new(&mut packet[..]).unwrap();
+                let mut ip_header = MutableIpv4Packet::new(&mut packet[..packet_size]).unwrap();
                 ip_header.set_next_level_protocol(proto);
                 ip_header.set_source(src_ip);
                 ip_header.set_destination(dst_ip);
@@ -106,34 +99,19 @@ pub fn build_ipv4_packet(cli: Cli) {
                 let src_port = cli
                     .src_port
                     .as_ref()
-                    .map(|ports| {
-                        ports
-                            .choose(&mut rng)
-                            .map(|port| match port {
-                                Range::Single(value) => *value,
-                                Range::Range(range) => rng.random_range(range.clone()),
-                            })
-                            .unwrap()
-                    })
+                    .map(|i| i.get_random_value(&mut rng))
                     .unwrap_or_else(|| rng.random());
 
                 let dst_port = cli
                     .dst_port
                     .as_ref()
-                    .map(|ports| {
-                        ports
-                            .choose(&mut rng)
-                            .map(|port| match port {
-                                Range::Single(value) => *value,
-                                Range::Range(range) => rng.random_range(range.clone()),
-                            })
-                            .unwrap()
-                    })
+                    .map(|i| i.get_random_value(&mut rng))
                     .unwrap_or_else(|| rng.random());
 
                 if proto == IpNextHeaderProtocols::Tcp {
                     let mut tcp_header =
-                        MutableTcpPacket::new(&mut packet[IP_HEADER_SIZE as usize..]).unwrap();
+                        MutableTcpPacket::new(&mut packet[IP_HEADER_SIZE as usize..packet_size])
+                            .unwrap();
 
                     tcp_header.set_source(src_port);
                     tcp_header.set_destination(dst_port);
@@ -186,7 +164,8 @@ pub fn build_ipv4_packet(cli: Cli) {
                     tcp_header.set_checksum(checksum);
                 } else if proto == IpNextHeaderProtocols::Udp {
                     let mut udp_header =
-                        MutableUdpPacket::new(&mut packet[IP_HEADER_SIZE as usize..]).unwrap();
+                        MutableUdpPacket::new(&mut packet[IP_HEADER_SIZE as usize..packet_size])
+                            .unwrap();
 
                     udp_header.set_source(src_port);
                     udp_header.set_destination(dst_port);
@@ -200,9 +179,7 @@ pub fn build_ipv4_packet(cli: Cli) {
                 }
             }
 
-            let mut tmp_packet = packet
-                .split_at_mut(data_size as usize + header_size as usize)
-                .0;
+            let mut tmp_packet = packet.split_at_mut(packet_size).0;
 
             let mut ip_header = MutableIpv4Packet::new(&mut tmp_packet).unwrap();
             let checksum = checksum(&ip_header.to_immutable());

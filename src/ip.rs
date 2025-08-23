@@ -1,26 +1,25 @@
-use std::net::Ipv4Addr;
 use std::str::FromStr;
 
 use ipnet::Ipv4Net;
 
+use crate::range::Range;
+
 #[derive(Debug, Clone)]
-pub enum Ip {
-    Address(Ipv4Addr),
-    Network(Ipv4Net),
-}
+pub struct Ip(pub Range<u32>);
 
 impl FromStr for Ip {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.contains('/') {
-            Ipv4Net::from_str(s)
-                .map(Ip::Network)
-                .map_err(|_| "Invalid network format".to_string())
+        let net = if s.contains('/') {
+            s.to_string()
         } else {
-            Ipv4Addr::from_str(s)
-                .map(Ip::Address)
-                .map_err(|_| "Invalid IP address format".to_string())
-        }
+            format!("{}/32", s)
+        };
+
+        let net = Ipv4Net::from_str(&net).map_err(|_| "Invalid IP or network format".to_string());
+
+        net.map(|net| Ip(Range::new(net.network().into(), net.broadcast().into())))
+            .map_err(|e| e.to_string())
     }
 }

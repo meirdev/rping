@@ -19,17 +19,14 @@ pub struct Cli {
     )]
     pub flood: bool,
 
-    #[arg(short = 't', long, help = "Number of threads to use")]
-    pub threads: Option<usize>,
-
-    #[arg(short = 'c', long, help = "Number of packets to send (per thread)")]
+    #[arg(short = 'c', long, help = "Number of packets to send")]
     pub count: Option<u32>,
 
-    #[arg(long, num_args = 0.., value_delimiter = ',', help = "Destination IP address or network (e.g.: 10.0.0.0/8, 10.0.1.15)")]
-    pub dst_ip: Option<Vec<Ip>>,
+    #[arg(long, num_args = 0.., help = "Destination IP address or network (e.g.: 10.0.0.0/8, 10.0.1.15)")]
+    pub dst_ip: Option<Ip>,
 
-    #[arg(long, num_args = 0.., value_delimiter = ',', help = "Source IP address or network (e.g.: 10.0.0.0/8, 10.0.1.15)")]
-    pub src_ip: Option<Vec<Ip>>,
+    #[arg(long, num_args = 0.., help = "Source IP address or network (e.g.: 10.0.0.0/8, 10.0.1.15)")]
+    pub src_ip: Option<Ip>,
 
     #[arg(short = 't', long, default_value_t = 64, help = "Time to live (TTL)")]
     pub ttl: u8,
@@ -52,11 +49,11 @@ pub struct Cli {
     )]
     pub proto: Option<u8>,
 
-    #[arg(long, num_args = 0.., value_delimiter = ',', help = "Destination port or port range (e.g.: 80, 1000-2000)")]
-    pub dst_port: Option<Vec<Range<u16>>>,
+    #[arg(long, num_args = 0.., help = "Destination port or port range (e.g.: 80, 1000-2000)")]
+    pub dst_port: Option<Range<u16>>,
 
-    #[arg(long, num_args = 0.., value_delimiter = ',', help = "Source port or port range (e.g.: 80, 1000-2000)")]
-    pub src_port: Option<Vec<Range<u16>>>,
+    #[arg(long, num_args = 0.., help = "Source port or port range (e.g.: 80, 1000-2000)")]
+    pub src_port: Option<Range<u16>>,
 
     #[arg(short = 'F', long, default_value_t = false, help = "Set FIN flag")]
     pub fin: bool,

@@ -1,9 +1,8 @@
-use std::thread;
-
 use clap::Parser;
 use log::debug;
 use pnet::datalink;
-use rping::{cli::Cli, packet::build_ipv4_packet};
+use rping::cli::Cli;
+use rping::packet::build_ipv4_packet;
 
 fn main() {
     env_logger::init();
@@ -25,25 +24,5 @@ fn main() {
 
     println!("Using interface: {}", interface.name);
 
-    if let Some(num_threads) = args.threads {
-        println!("Using {} threads", num_threads);
-
-        let mut threads = Vec::new();
-
-        for _ in 0..num_threads {
-            let args_clone = args.clone();
-            let t = thread::spawn(move || {
-                build_ipv4_packet(args_clone);
-            });
-            threads.push(t);
-        }
-
-        threads.into_iter().for_each(|t| {
-            if let Err(e) = t.join() {
-                eprintln!("Thread panicked: {:?}", e);
-            }
-        });
-    } else {
-        build_ipv4_packet(args);
-    }
+    build_ipv4_packet(args);
 }

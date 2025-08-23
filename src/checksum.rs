@@ -1,12 +1,11 @@
 use std::net::Ipv4Addr;
 
 use internet_checksum::Checksum;
-use pnet_packet::{
-    Packet,
-    ip::{IpNextHeaderProtocol, IpNextHeaderProtocols},
-    tcp::TcpPacket,
-    udp::UdpPacket,
-};
+use pnet_packet::Packet;
+use pnet_packet::ip::IpNextHeaderProtocol;
+use pnet_packet::ip::IpNextHeaderProtocols;
+use pnet_packet::tcp::TcpPacket;
+use pnet_packet::udp::UdpPacket;
 
 fn proto_ipv4_checksum<T: Packet>(
     packet: &T,

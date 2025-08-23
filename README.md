@@ -11,8 +11,7 @@ Options:
   -I, --inteface <INTEFACE>       Network interface to use
   -i, --interval <INTERVAL>       Interval between packets (e.g., 100ms, 1s) [default: 100ms]
       --flood                     Enable flood mode (send packets as fast as possible)
-  -t, --threads <THREADS>         Number of threads to use
-  -c, --count <COUNT>             Number of packets to send (per thread)
+  -c, --count <COUNT>             Number of packets to send
       --dst-ip [<DST_IP>...]      Destination IP address or network (e.g.: 10.0.0.0/8, 10.0.1.15)
       --src-ip [<SRC_IP>...]      Source IP address or network (e.g.: 10.0.0.0/8, 10.0.1.15)
   -t, --ttl <TTL>                 Time to live (TTL) [default: 64]
