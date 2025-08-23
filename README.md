@@ -1,6 +1,6 @@
 # rping
 
-A packet generation tool designed for simulating high-volume network traffic patterns.
+A packet generation tool designed for simulating high-volume network traffic.
 
 ## Usage
 
