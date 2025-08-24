@@ -1,7 +1,11 @@
 use std::net::Ipv4Addr;
+use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::thread;
 
 use log::debug;
+use log::error;
 use pnet::packet::ip::IpNextHeaderProtocol;
 use pnet::packet::ip::IpNextHeaderProtocols;
 use pnet::packet::ipv4::MutableIpv4Packet;
@@ -26,7 +30,7 @@ const IP_HEADER_SIZE: u16 = 20;
 const TCP_HEADER_SIZE: u16 = 20;
 const UDP_HEADER_SIZE: u16 = 8;
 
-pub fn build_ipv4_packet(cli: Cli) {
+pub fn build_ipv4_packet(cli: Cli, packets: &Arc<AtomicU64>) {
     let proto = if cli.tcp {
         IpNextHeaderProtocols::Tcp
     } else if cli.udp {
@@ -187,8 +191,15 @@ pub fn build_ipv4_packet(cli: Cli) {
 
             debug!("{:#?}", ip_header);
 
-            tx.send_to(&ip_header, std::net::IpAddr::V4(dst_ip))
-                .expect("Failed to send packet");
+            if tx
+                .send_to(&ip_header, std::net::IpAddr::V4(dst_ip))
+                .is_err()
+            {
+                error!("Failed to send packet to {:#?}", ip_header);
+                continue;
+            }
+
+            packets.fetch_add(1, Ordering::SeqCst);
 
             if cli.flood {
                 continue;

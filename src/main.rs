@@ -1,3 +1,7 @@
+use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+
 use clap::Parser;
 use log::debug;
 use pnet::datalink;
@@ -24,5 +28,14 @@ fn main() {
 
     println!("Using interface: {}", interface.name);
 
-    build_ipv4_packet(args);
+    let packets = Arc::new(AtomicU64::new(0));
+    let packets_clone = packets.clone();
+
+    ctrlc::set_handler(move || {
+        println!("{} packets sent", packets_clone.load(Ordering::SeqCst));
+        std::process::exit(0);
+    })
+    .unwrap();
+
+    build_ipv4_packet(args, &packets);
 }
