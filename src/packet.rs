@@ -52,7 +52,16 @@ pub fn build_ipv4_packet(cli: Cli, packets: &Arc<AtomicU64>) {
 
     let mut packet = [0u8; MAX_PACKET_SIZE as usize];
 
-    packet.split_at_mut(header_size as usize).1.fill('X' as u8);
+    let (_, body) = packet.split_at_mut(header_size as usize);
+
+    if let Some(fill_data) = cli.fill_data {
+        if !fill_data.is_ascii() {
+            eprintln!("Fill data must be an ASCII character.");
+            std::process::exit(1);
+        }
+
+        body.fill(fill_data as u8);
+    }
 
     let mut count = 0;
 

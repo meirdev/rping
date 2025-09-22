@@ -34,6 +34,7 @@ Options:
       --seq <SEQ>                 Set TCP sequence number
       --ack-seq <ACK_SEQ>         Set TCP acknowledgment number
   -d, --data <DATA>               Data size in bytes (e.g.: 100, 200-300)
+  -C, --fill-data <FILL_DATA>     Fill data with a specific character (ASCII only) [default: X]
   -h, --help                      Print help
   -V, --version                   Print version
 ```

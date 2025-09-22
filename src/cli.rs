@@ -100,4 +100,7 @@ pub struct Cli {
 
     #[arg(short = 'd', long, help = "Data size in bytes (e.g.: 100, 200-300)")]
     pub data: Option<Range<u16>>,
+
+    #[arg(short = 'C', long, help = "Fill data with a specific character (ASCII only)", default_value = "X")]
+    pub fill_data: Option<char>,
 }
