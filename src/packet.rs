@@ -4,6 +4,7 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::thread;
 
+use internet_checksum::Checksum;
 use log::debug;
 use log::error;
 use pnet::packet::ip::IpNextHeaderProtocol;
@@ -15,6 +16,10 @@ use pnet::packet::tcp::TcpFlags;
 use pnet::packet::udp::MutableUdpPacket;
 use pnet::transport::TransportChannelType::Layer3;
 use pnet::transport::transport_channel;
+use pnet_packet::Packet;
+use pnet_packet::icmp::IcmpCode;
+use pnet_packet::icmp::IcmpType;
+use pnet_packet::icmp::MutableIcmpPacket;
 use rand::Rng;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
@@ -29,12 +34,15 @@ const MAX_PACKET_SIZE: u16 = u16::MAX;
 const IP_HEADER_SIZE: u16 = 20;
 const TCP_HEADER_SIZE: u16 = 20;
 const UDP_HEADER_SIZE: u16 = 8;
+const ICMP_HEADER_SIZE: u16 = 8;
 
 pub fn build_ipv4_packet(cli: Cli, packets: &Arc<AtomicU64>) {
     let proto = if cli.tcp {
         IpNextHeaderProtocols::Tcp
     } else if cli.udp {
         IpNextHeaderProtocols::Udp
+    } else if cli.icmp {
+        IpNextHeaderProtocols::Icmp
     } else if let Some(proto) = cli.proto {
         IpNextHeaderProtocol(proto)
     } else {
@@ -45,6 +53,7 @@ pub fn build_ipv4_packet(cli: Cli, packets: &Arc<AtomicU64>) {
     let header_size = match proto {
         IpNextHeaderProtocols::Tcp => IP_HEADER_SIZE + TCP_HEADER_SIZE,
         IpNextHeaderProtocols::Udp => IP_HEADER_SIZE + UDP_HEADER_SIZE,
+        IpNextHeaderProtocols::Icmp => IP_HEADER_SIZE + ICMP_HEADER_SIZE, // only for ICMP echo requests!
         _ => IP_HEADER_SIZE,
     };
 
@@ -190,6 +199,23 @@ pub fn build_ipv4_packet(cli: Cli, packets: &Arc<AtomicU64>) {
                     let checksum = udp_ipv4_checksum(&udp_header.to_immutable(), &src_ip, &dst_ip);
                     udp_header.set_checksum(checksum);
                 }
+            } else if proto == IpNextHeaderProtocols::Icmp {
+                let mut icmp_packet =
+                    MutableIcmpPacket::new(&mut packet[IP_HEADER_SIZE as usize..packet_size])
+                        .unwrap();
+
+                icmp_packet.set_icmp_type(IcmpType(cli.icmptype));
+                icmp_packet.set_icmp_code(IcmpCode(cli.icmpcode));
+
+                icmp_packet.set_checksum(0);
+
+                let mut checksum = Checksum::new();
+                checksum.add_bytes(&icmp_packet.packet());
+
+                let checksum_value = checksum.checksum();
+                let checksum_value = u16::from_be_bytes(checksum_value);
+
+                icmp_packet.set_checksum(checksum_value);
             }
 
             let mut tmp_packet = packet.split_at_mut(packet_size).0;

@@ -1,3 +1,4 @@
+use clap::ArgAction;
 use clap::Parser;
 
 use crate::ip::Ip;
@@ -34,13 +35,16 @@ pub struct Cli {
     #[arg(long, help = "IP id")]
     pub id: Option<u16>,
 
-    #[arg(long, group = "protocol", help = "TCP mode")]
+    #[arg(long, group = "protocol", action = ArgAction::SetTrue, help = "TCP mode")]
     pub tcp: bool,
 
-    #[arg(long, group = "protocol", help = "UDP mode")]
+    #[arg(long, group = "protocol", action = ArgAction::SetTrue, help = "UDP mode")]
     pub udp: bool,
 
-    #[arg(long, group = "protocol", help = "RAW IP mode")]
+    #[arg(long, group = "protocol", action = ArgAction::SetTrue, help = "ICMP mode")]
+    pub icmp: bool,
+
+    #[arg(long, group = "protocol", action = ArgAction::SetTrue, help = "RAW IP mode")]
     pub rawip: bool,
 
     #[arg(
@@ -55,28 +59,28 @@ pub struct Cli {
     #[arg(long, num_args = 0.., help = "Source port or port range (e.g.: 80, 1000-2000)")]
     pub src_port: Option<Range<u16>>,
 
-    #[arg(short = 'F', long, default_value_t = false, help = "Set FIN flag")]
+    #[arg(short = 'F', long, action = ArgAction::SetTrue, help = "Set FIN flag")]
     pub fin: bool,
 
-    #[arg(short = 'S', long, default_value_t = false, help = "Set SYN flag")]
+    #[arg(short = 'S', long, action = ArgAction::SetTrue, help = "Set SYN flag")]
     pub syn: bool,
 
-    #[arg(short = 'R', long, default_value_t = false, help = "Set RST flag")]
+    #[arg(short = 'R', long, action = ArgAction::SetTrue, help = "Set RST flag")]
     pub rst: bool,
 
-    #[arg(short = 'P', long, default_value_t = false, help = "Set PSH flag")]
+    #[arg(short = 'P', long, action = ArgAction::SetTrue, help = "Set PSH flag")]
     pub psh: bool,
 
-    #[arg(short = 'A', long, default_value_t = false, help = "Set ACK flag")]
+    #[arg(short = 'A', long, action = ArgAction::SetTrue, help = "Set ACK flag")]
     pub ack: bool,
 
-    #[arg(short = 'U', long, default_value_t = false, help = "Set URG flag")]
+    #[arg(short = 'U', long, action = ArgAction::SetTrue, help = "Set URG flag")]
     pub urg: bool,
 
     #[arg(
         short = 'X',
         long,
-        default_value_t = false,
+        action = ArgAction::SetTrue,
         help = "Set X unused flag (0x40)"
     )]
     pub xmas: bool,
@@ -84,7 +88,7 @@ pub struct Cli {
     #[arg(
         short = 'Y',
         long,
-        default_value_t = false,
+        action = ArgAction::SetTrue,
         help = "Set Y ununsed flag (0x80)"
     )]
     pub ymas: bool,
@@ -101,6 +105,16 @@ pub struct Cli {
     #[arg(short = 'd', long, help = "Data size in bytes (e.g.: 100, 200-300)")]
     pub data: Option<Range<u16>>,
 
-    #[arg(short = 'C', long, help = "Fill data with a specific character (ASCII only)", default_value = "X")]
+    #[arg(
+        long,
+        help = "Fill data with a specific character (ASCII only)",
+        default_value = "X"
+    )]
     pub fill_data: Option<char>,
+
+    #[arg(short = 'C', long, default_value_t = 8, help = "Set ICMP type")]
+    pub icmptype: u8,
+
+    #[arg(short = 'K', long, default_value_t = 0, help = "Set ICMP code")]
+    pub icmpcode: u8,
 }
