@@ -10,6 +10,9 @@ pub struct Cli {
     #[arg(short = 'I', long, help = "Network interface to use")]
     pub inteface: String,
 
+    #[arg(short = 'q', long, action = ArgAction::SetTrue, help = "Quiet mode - disable real-time statistics display")]
+    pub quiet: bool,
+
     #[arg(short = 'i', long, default_value  = "100ms", value_parser = |arg: &str| duration_str::parse(arg), help = "Interval between packets (e.g., 100ms, 1s)")]
     pub interval: std::time::Duration,
 

@@ -36,7 +36,7 @@ const TCP_HEADER_SIZE: u16 = 20;
 const UDP_HEADER_SIZE: u16 = 8;
 const ICMP_HEADER_SIZE: u16 = 8;
 
-pub fn build_ipv4_packet(cli: Cli, packets: &Arc<AtomicU64>) {
+pub fn build_ipv4_packet(cli: Cli, packets: &Arc<AtomicU64>, bytes: &Arc<AtomicU64>) {
     let proto = if cli.tcp {
         IpNextHeaderProtocols::Tcp
     } else if cli.udp {
@@ -235,6 +235,7 @@ pub fn build_ipv4_packet(cli: Cli, packets: &Arc<AtomicU64>) {
             }
 
             packets.fetch_add(1, Ordering::SeqCst);
+            bytes.fetch_add(packet_size as u64, Ordering::SeqCst);
 
             if cli.flood {
                 continue;
