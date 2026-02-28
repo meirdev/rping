@@ -23,8 +23,11 @@ pub struct Cli {
     )]
     pub flood: bool,
 
-    #[arg(short = 'c', long, help = "Number of packets to send")]
+    #[arg(short = 'c', long, group = "limit", help = "Number of packets to send")]
     pub count: Option<u32>,
+
+    #[arg(long, group = "limit", value_parser = |arg: &str| duration_str::parse(arg), help = "Duration to run (e.g., 10s, 1m, 1h)")]
+    pub duration: Option<std::time::Duration>,
 
     #[arg(long, num_args = 0.., help = "Destination IP address or network (e.g.: 10.0.0.0/8, 10.0.1.15)")]
     pub dst_ip: Option<Ip>,

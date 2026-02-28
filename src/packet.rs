@@ -20,6 +20,7 @@ use pnet_packet::Packet;
 use pnet_packet::icmp::IcmpCode;
 use pnet_packet::icmp::IcmpType;
 use pnet_packet::icmp::MutableIcmpPacket;
+use quanta::Instant;
 use rand::Rng;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
@@ -73,6 +74,7 @@ pub fn build_ipv4_packet(cli: Cli, packets: &Arc<AtomicU64>, bytes: &Arc<AtomicU
     }
 
     let mut count = 0;
+    let start_time = Instant::now();
 
     match transport_channel(0, Layer3(proto)) {
         Ok((mut tx, _)) => loop {
@@ -236,6 +238,12 @@ pub fn build_ipv4_packet(cli: Cli, packets: &Arc<AtomicU64>, bytes: &Arc<AtomicU
 
             packets.fetch_add(1, Ordering::SeqCst);
             bytes.fetch_add(packet_size as u64, Ordering::SeqCst);
+
+            if let Some(duration) = cli.duration {
+                if start_time.elapsed() >= duration {
+                    break;
+                }
+            }
 
             if cli.flood {
                 continue;
