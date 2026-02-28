@@ -1,3 +1,5 @@
+use std::fmt::Display;
+use std::net::Ipv4Addr;
 use std::str::FromStr;
 
 use ipnet::Ipv4Net;
@@ -21,5 +23,17 @@ impl FromStr for Ip {
 
         net.map(|net| Ip(Range::new(net.network().into(), net.broadcast().into())))
             .map_err(|e| e.to_string())
+    }
+}
+
+impl Display for Ip {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let start = Ipv4Addr::from(*self.0.0.start());
+        let end = Ipv4Addr::from(*self.0.0.end());
+        if start == end {
+            write!(f, "{}", start)
+        } else {
+            write!(f, "{}-{}", start, end)
+        }
     }
 }

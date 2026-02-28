@@ -56,3 +56,13 @@ impl<T: FromStr + PartialOrd + Display + Copy + Clone + SampleUniform> FromStr f
         }
     }
 }
+
+impl<T: Display + PartialEq + Clone> Display for Range<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.0.start() == self.0.end() {
+            write!(f, "{}", self.0.start())
+        } else {
+            write!(f, "{}-{}", self.0.start(), self.0.end())
+        }
+    }
+}

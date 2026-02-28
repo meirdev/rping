@@ -24,6 +24,139 @@ use pnet::datalink;
 use rping::cli::Cli;
 use rping::packet::build_ipv4_packet;
 
+fn print_config(args: &Cli) {
+    let proto = if args.tcp {
+        "TCP"
+    } else if args.udp {
+        "UDP"
+    } else if args.icmp {
+        "ICMP"
+    } else if args.rawip {
+        "RAW IP"
+    } else if let Some(p) = args.proto {
+        &format!("proto {}", p)
+    } else {
+        "None"
+    };
+
+    let src_ip = args
+        .src_ip
+        .as_ref()
+        .map(|ip| format!("{}", ip))
+        .unwrap_or_else(|| "random".to_string());
+
+    let dst_ip = args
+        .dst_ip
+        .as_ref()
+        .map(|ip| format!("{}", ip))
+        .unwrap_or_else(|| "random".to_string());
+
+    let _ = execute!(
+        stdout(),
+        Print("Configuration:\n"),
+        Print(format!("  {:14} {}\n", "Interface:", args.inteface)),
+        Print(format!("  {:14} {}\n", "Protocol:", proto)),
+        Print(format!("  {:14} {}\n", "Source IP:", src_ip)),
+        Print(format!("  {:14} {}\n", "Dest IP:", dst_ip)),
+    );
+
+    if args.tcp || args.udp {
+        let src_port = args
+            .src_port
+            .as_ref()
+            .map(|p| format!("{}", p))
+            .unwrap_or_else(|| "random".to_string());
+        let dst_port = args
+            .dst_port
+            .as_ref()
+            .map(|p| format!("{}", p))
+            .unwrap_or_else(|| "random".to_string());
+
+        let _ = execute!(
+            stdout(),
+            Print(format!("  {:14} {}\n", "Source Port:", src_port)),
+            Print(format!("  {:14} {}\n", "Dest Port:", dst_port)),
+        );
+    }
+
+    if args.tcp {
+        let mut flags = Vec::new();
+        if args.syn {
+            flags.push("SYN");
+        }
+        if args.ack {
+            flags.push("ACK");
+        }
+        if args.fin {
+            flags.push("FIN");
+        }
+        if args.rst {
+            flags.push("RST");
+        }
+        if args.psh {
+            flags.push("PSH");
+        }
+        if args.urg {
+            flags.push("URG");
+        }
+        if !flags.is_empty() {
+            let _ = execute!(
+                stdout(),
+                Print(format!("  {:14} {}\n", "TCP Flags:", flags.join(", "))),
+            );
+        }
+    }
+
+    if args.icmp {
+        let _ = execute!(
+            stdout(),
+            Print(format!("  {:14} {}\n", "ICMP Type:", args.icmptype)),
+            Print(format!("  {:14} {}\n", "ICMP Code:", args.icmpcode)),
+        );
+    }
+
+    let _ = execute!(stdout(), Print(format!("  {:14} {}\n", "TTL:", args.ttl)),);
+
+    let data_size = args
+        .data
+        .as_ref()
+        .map(|d| format!("{}", d))
+        .unwrap_or_else(|| "0".to_string());
+    let _ = execute!(
+        stdout(),
+        Print(format!("  {:14} {}\n", "Data Size:", data_size)),
+    );
+
+    if args.flood {
+        let _ = execute!(stdout(), Print(format!("  {:14} flood\n", "Mode:")));
+    } else {
+        let _ = execute!(
+            stdout(),
+            Print(format!(
+                "  {:14} {}\n",
+                "Interval:",
+                FancyDuration(args.interval).truncate(1)
+            )),
+        );
+    }
+
+    if let Some(count) = args.count {
+        let _ = execute!(stdout(), Print(format!("  {:14} {}\n", "Count:", count)));
+    }
+    if let Some(duration) = args.duration {
+        let _ = execute!(
+            stdout(),
+            Print(format!(
+                "  {:14} {}\n",
+                "Duration:",
+                FancyDuration(duration).truncate(1)
+            )),
+        );
+    }
+
+    let _ = execute!(stdout(), Print("\n"));
+}
+
 fn print_stats<W: Write>(
     out: &mut W,
     pkt_count: u64,
@@ -31,13 +164,27 @@ fn print_stats<W: Write>(
     elapsed: Duration,
     newline: bool,
 ) {
+    let elapsed_secs = elapsed.as_secs_f64();
+    let pps = if elapsed_secs > 0.0 {
+        (pkt_count as f64 / elapsed_secs) as u64
+    } else {
+        0
+    };
+    let bps = if elapsed_secs > 0.0 {
+        (byte_count as f64 / elapsed_secs) as u64
+    } else {
+        0
+    };
+
     let _ = execute!(
         out,
         MoveToColumn(0),
         Print(format!(
-            "{} packets | {} | {}",
+            "{} packets | {} pps | {} | {}/s | {}",
             pkt_count.to_formatted_string(&Locale::en),
+            pps.to_formatted_string(&Locale::en),
             ByteSize(byte_count),
+            ByteSize(bps),
             FancyDuration(elapsed).truncate(1)
         )),
         Clear(ClearType::UntilNewLine),
@@ -64,6 +211,8 @@ fn main() {
         .unwrap();
 
     debug!("Options: {:?}", args);
+
+    print_config(&args);
 
     let start_time = Instant::now();
 
