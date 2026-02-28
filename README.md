@@ -45,6 +45,7 @@ sudo rping -I eth0 --udp --dst-ip 192.168.1.1 --dst-port 53 -d 100-500
 | `--interval`  | `-i`  | Interval between packets (default: 100ms)       |
 | `--flood`     |       | Send packets as fast as possible                |
 | `--count`     | `-c`  | Number of packets to send                       |
+| `--duration`  |       | Duration to run (e.g., 10s, 1m, 1h)             |
 | `--dst-ip`    |       | Destination IP or CIDR (e.g., 10.0.0.0/8)       |
 | `--src-ip`    |       | Source IP or CIDR                               |
 | `--ttl`       | `-t`  | Time to live (default: 64)                      |
