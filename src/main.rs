@@ -185,7 +185,7 @@ fn print_stats<W: Write>(
             pps.to_formatted_string(&Locale::en),
             ByteSize(byte_count),
             ByteSize(bps),
-            FancyDuration(elapsed).truncate(1)
+            FancyDuration(Duration::from_secs(elapsed.as_secs()))
         )),
         Clear(ClearType::UntilNewLine),
     );
