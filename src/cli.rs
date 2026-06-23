@@ -8,7 +8,7 @@ use crate::range::Range;
 #[command(version)]
 pub struct Cli {
     #[arg(short = 'I', long, help = "Network interface to use")]
-    pub inteface: String,
+    pub inteface: Option<String>,
 
     #[arg(short = 'q', long, action = ArgAction::SetTrue, help = "Quiet mode - disable real-time statistics display")]
     pub quiet: bool,

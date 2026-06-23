@@ -20,7 +20,6 @@ use fancy_duration::FancyDuration;
 use log::debug;
 use num_format::Locale;
 use num_format::ToFormattedString;
-use pnet::datalink;
 use pnet::packet::ip::IpNextHeaderProtocol;
 use pnet::packet::ip::IpNextHeaderProtocols;
 use rping::cli::Cli;
@@ -62,6 +61,11 @@ fn print_config(args: &Cli) {
         "None"
     };
 
+    let interface = args
+        .inteface
+        .as_deref()
+        .unwrap_or("default");
+
     let src_ip = args
         .src_ip
         .as_ref()
@@ -77,7 +81,7 @@ fn print_config(args: &Cli) {
     let _ = execute!(
         stdout(),
         Print("Configuration:\n"),
-        Print(format!("  {:14} {}\n", "Interface:", args.inteface)),
+        Print(format!("  {:14} {}\n", "Interface:", interface)),
         Print(format!("  {:14} {}\n", "Protocol:", proto)),
         Print(format!("  {:14} {}\n", "Source IP:", src_ip)),
         Print(format!("  {:14} {}\n", "Dest IP:", dst_ip)),
@@ -221,17 +225,6 @@ fn main() {
     env_logger::init();
 
     let args = Cli::parse();
-
-    let interfaces = datalink::interfaces();
-    let _interface = interfaces
-        .into_iter()
-        .filter(|iface| iface.name == args.inteface)
-        .next()
-        .or_else(|| {
-            eprintln!("Interface {} not found", args.inteface);
-            std::process::exit(1);
-        })
-        .unwrap();
 
     debug!("Options: {:?}", args);
 
