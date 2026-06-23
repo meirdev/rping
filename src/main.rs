@@ -20,9 +20,31 @@ use fancy_duration::FancyDuration;
 use log::debug;
 use num_format::Locale;
 use num_format::ToFormattedString;
-use pnet::datalink;
+use pnet::packet::ip::IpNextHeaderProtocol;
+use pnet::packet::ip::IpNextHeaderProtocols;
 use rping::cli::Cli;
 use rping::packet::build_ipv4_packet;
+use rping::packet::build_ipv6_packet;
+
+fn resolve_proto(args: &Cli, ipv6: bool) -> IpNextHeaderProtocol {
+    if ipv6 && args.icmp {
+        eprintln!("ICMP is not supported for IPv6.");
+        std::process::exit(1);
+    }
+
+    if args.tcp {
+        IpNextHeaderProtocols::Tcp
+    } else if args.udp {
+        IpNextHeaderProtocols::Udp
+    } else if args.icmp {
+        IpNextHeaderProtocols::Icmp
+    } else if let Some(proto) = args.proto {
+        IpNextHeaderProtocol(proto)
+    } else {
+        eprintln!("No protocol specified. Use --tcp, --udp, or --proto.");
+        std::process::exit(1);
+    }
+}
 
 fn print_config(args: &Cli) {
     let proto = if args.tcp {
@@ -39,6 +61,11 @@ fn print_config(args: &Cli) {
         "None"
     };
 
+    let interface = args
+        .inteface
+        .as_deref()
+        .unwrap_or("default");
+
     let src_ip = args
         .src_ip
         .as_ref()
@@ -54,7 +81,7 @@ fn print_config(args: &Cli) {
     let _ = execute!(
         stdout(),
         Print("Configuration:\n"),
-        Print(format!("  {:14} {}\n", "Interface:", args.inteface)),
+        Print(format!("  {:14} {}\n", "Interface:", interface)),
         Print(format!("  {:14} {}\n", "Protocol:", proto)),
         Print(format!("  {:14} {}\n", "Source IP:", src_ip)),
         Print(format!("  {:14} {}\n", "Dest IP:", dst_ip)),
@@ -199,18 +226,29 @@ fn main() {
 
     let args = Cli::parse();
 
-    let interfaces = datalink::interfaces();
-    let _interface = interfaces
-        .into_iter()
-        .filter(|iface| iface.name == args.inteface)
-        .next()
-        .or_else(|| {
-            eprintln!("Interface {} not found", args.inteface);
-            std::process::exit(1);
-        })
-        .unwrap();
-
     debug!("Options: {:?}", args);
+
+    // Auto-detect the IP version from the source/destination arguments. The
+    // source and destination must use the same version.
+    let ipv6 = match (args.src_ip.as_ref(), args.dst_ip.as_ref()) {
+        (Some(src), Some(dst)) if src.is_v6() != dst.is_v6() => {
+            eprintln!("Source and destination IP must be the same version.");
+            std::process::exit(1);
+        }
+        (src, dst) => src
+            .map(|i| i.is_v6())
+            .or(dst.map(|i| i.is_v6()))
+            .unwrap_or(false),
+    };
+
+    let proto = resolve_proto(&args, ipv6);
+
+    if let Some(fill_data) = args.fill_data {
+        if !fill_data.is_ascii() {
+            eprintln!("Fill data must be an ASCII character.");
+            std::process::exit(1);
+        }
+    }
 
     print_config(&args);
 
@@ -250,5 +288,9 @@ fn main() {
         });
     }
 
-    build_ipv4_packet(args, &packets, &bytes);
+    if ipv6 {
+        build_ipv6_packet(args, proto, &packets, &bytes);
+    } else {
+        build_ipv4_packet(args, proto, &packets, &bytes);
+    }
 }
