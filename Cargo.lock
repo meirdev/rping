@@ -731,6 +731,7 @@ dependencies = [
  "fancy-duration",
  "internet-checksum",
  "ipnet",
+ "libc",
  "log",
  "num-format",
  "pnet",
