@@ -70,6 +70,108 @@ fn tcp_flags(cli: &Cli) -> u8 {
     flags
 }
 
+fn random_data_size(cli: &Cli, rng: &mut StdRng) -> u16 {
+    cli.data
+        .as_ref()
+        .map(|i| i.get_random_value(rng))
+        .unwrap_or(0)
+}
+
+fn random_ports(cli: &Cli, rng: &mut StdRng) -> (u16, u16) {
+    let src_port = cli
+        .src_port
+        .as_ref()
+        .map(|i| i.get_random_value(rng))
+        .unwrap_or_else(|| rng.random());
+
+    let dst_port = cli
+        .dst_port
+        .as_ref()
+        .map(|i| i.get_random_value(rng))
+        .unwrap_or_else(|| rng.random());
+
+    (src_port, dst_port)
+}
+
+fn build_tcp_header(
+    tcp_header: &mut MutableTcpPacket,
+    cli: &Cli,
+    src_port: u16,
+    dst_port: u16,
+    rng: &mut StdRng,
+) {
+    tcp_header.set_source(src_port);
+    tcp_header.set_destination(dst_port);
+    tcp_header.set_acknowledgement(cli.ack_seq.unwrap_or_else(|| rng.random()));
+    tcp_header.set_sequence(cli.seq.unwrap_or_else(|| rng.random()));
+    tcp_header.set_flags(tcp_flags(cli));
+    tcp_header.set_window(cli.window);
+    tcp_header.set_data_offset(5);
+    tcp_header.set_checksum(0);
+}
+
+fn build_udp_header(
+    udp_header: &mut MutableUdpPacket,
+    src_port: u16,
+    dst_port: u16,
+    data_size: u16,
+) {
+    udp_header.set_source(src_port);
+    udp_header.set_destination(dst_port);
+    udp_header.set_length(UDP_HEADER_SIZE + data_size);
+    udp_header.set_checksum(0);
+}
+
+fn drive<F>(
+    cli: &Cli,
+    header_size: u16,
+    packets: &Arc<AtomicU64>,
+    bytes: &Arc<AtomicU64>,
+    mut send_one: F,
+) where
+    F: FnMut(&mut StdRng, &mut [u8]) -> Option<u64>,
+{
+    let mut rng = StdRng::from_rng(&mut rand::rng());
+
+    let mut packet = [0u8; MAX_PACKET_SIZE as usize];
+
+    if let Some(fill_data) = cli.fill_data {
+        let (_, body) = packet.split_at_mut(header_size as usize);
+        body.fill(fill_data as u8);
+    }
+
+    let mut count = 0u32;
+    let start_time = Instant::now();
+
+    loop {
+        let Some(sent_bytes) = send_one(&mut rng, &mut packet) else {
+            continue;
+        };
+
+        packets.fetch_add(1, Ordering::SeqCst);
+        bytes.fetch_add(sent_bytes, Ordering::SeqCst);
+
+        if let Some(duration) = cli.duration {
+            if start_time.elapsed() >= duration {
+                break;
+            }
+        }
+
+        if cli.flood {
+            continue;
+        }
+
+        if let Some(cli_count) = cli.count {
+            count += 1;
+            if count >= cli_count {
+                break;
+            }
+        }
+
+        thread::sleep(cli.interval);
+    }
+}
+
 pub fn build_ipv4_packet(
     cli: Cli,
     proto: IpNextHeaderProtocol,
@@ -83,117 +185,67 @@ pub fn build_ipv4_packet(
         _ => IP_HEADER_SIZE,
     };
 
-    let mut rng = StdRng::from_rng(&mut rand::rng());
+    let (mut tx, _) = match transport_channel(0, Layer3(proto)) {
+        Ok(channel) => channel,
+        Err(e) => panic!(
+            "An error occurred when creating the datalink channel: {}",
+            e
+        ),
+    };
 
-    let mut packet = [0u8; MAX_PACKET_SIZE as usize];
+    drive(&cli, header_size, packets, bytes, |rng, packet| {
+        let data_size = random_data_size(&cli, rng);
 
-    let (_, body) = packet.split_at_mut(header_size as usize);
+        let src_ip = cli
+            .src_ip
+            .as_ref()
+            .map(|i| i.random_ipv4(rng))
+            .unwrap_or_else(|| random_public_ipv4(rng));
 
-    if let Some(fill_data) = cli.fill_data {
-        body.fill(fill_data as u8);
-    }
+        let dst_ip = cli
+            .dst_ip
+            .as_ref()
+            .map(|i| i.random_ipv4(rng))
+            .unwrap_or_else(|| random_public_ipv4(rng));
 
-    let mut count = 0;
-    let start_time = Instant::now();
+        let packet_size = (header_size + data_size) as usize;
 
-    match transport_channel(0, Layer3(proto)) {
-        Ok((mut tx, _)) => loop {
-            let data_size = cli
-                .data
-                .as_ref()
-                .map(|i| i.get_random_value(&mut rng))
-                .unwrap_or(0);
+        {
+            let mut ip_header = MutableIpv4Packet::new(&mut packet[..packet_size]).unwrap();
+            ip_header.set_next_level_protocol(proto);
+            ip_header.set_source(src_ip);
+            ip_header.set_destination(dst_ip);
+            ip_header.set_version(4);
+            ip_header.set_header_length(5);
+            ip_header.set_total_length(header_size + data_size);
+            ip_header.set_identification(cli.id.unwrap_or_else(|| rng.random()));
+            ip_header.set_ttl(cli.ttl);
+        }
 
-            let src_ip = cli
-                .src_ip
-                .as_ref()
-                .map(|i| i.random_ipv4(&mut rng))
-                .unwrap_or_else(|| random_public_ipv4(&mut rng));
+        match proto {
+            IpNextHeaderProtocols::Tcp => {
+                let (src_port, dst_port) = random_ports(&cli, rng);
+                let mut tcp_header =
+                    MutableTcpPacket::new(&mut packet[IP_HEADER_SIZE as usize..packet_size])
+                        .unwrap();
 
-            let dst_ip = cli
-                .dst_ip
-                .as_ref()
-                .map(|i| i.random_ipv4(&mut rng))
-                .unwrap_or_else(|| random_public_ipv4(&mut rng));
+                build_tcp_header(&mut tcp_header, &cli, src_port, dst_port, rng);
 
-            let packet_size = (header_size + data_size) as usize;
-
-            {
-                let mut ip_header = MutableIpv4Packet::new(&mut packet[..packet_size]).unwrap();
-                ip_header.set_next_level_protocol(proto);
-                ip_header.set_source(src_ip);
-                ip_header.set_destination(dst_ip);
-                ip_header.set_version(4);
-                ip_header.set_header_length(5);
-                ip_header.set_total_length(header_size + data_size as u16);
-
-                if let Some(id) = cli.id {
-                    ip_header.set_identification(id);
-                } else {
-                    ip_header.set_identification(rng.random());
-                }
-
-                ip_header.set_identification(rng.random());
-                ip_header.set_ttl(cli.ttl);
+                let checksum = tcp_ipv4_checksum(&tcp_header.to_immutable(), &src_ip, &dst_ip);
+                tcp_header.set_checksum(checksum);
             }
+            IpNextHeaderProtocols::Udp => {
+                let (src_port, dst_port) = random_ports(&cli, rng);
+                let mut udp_header =
+                    MutableUdpPacket::new(&mut packet[IP_HEADER_SIZE as usize..packet_size])
+                        .unwrap();
 
-            if proto == IpNextHeaderProtocols::Tcp || proto == IpNextHeaderProtocols::Udp {
-                let src_port = cli
-                    .src_port
-                    .as_ref()
-                    .map(|i| i.get_random_value(&mut rng))
-                    .unwrap_or_else(|| rng.random());
+                build_udp_header(&mut udp_header, src_port, dst_port, data_size);
 
-                let dst_port = cli
-                    .dst_port
-                    .as_ref()
-                    .map(|i| i.get_random_value(&mut rng))
-                    .unwrap_or_else(|| rng.random());
-
-                if proto == IpNextHeaderProtocols::Tcp {
-                    let mut tcp_header =
-                        MutableTcpPacket::new(&mut packet[IP_HEADER_SIZE as usize..packet_size])
-                            .unwrap();
-
-                    tcp_header.set_source(src_port);
-                    tcp_header.set_destination(dst_port);
-
-                    if let Some(ack_seq) = cli.ack_seq {
-                        tcp_header.set_acknowledgement(ack_seq);
-                    } else {
-                        tcp_header.set_acknowledgement(rng.random());
-                    }
-
-                    if let Some(seq) = cli.seq {
-                        tcp_header.set_sequence(seq);
-                    } else {
-                        tcp_header.set_sequence(rng.random());
-                    }
-
-                    tcp_header.set_flags(tcp_flags(&cli));
-                    tcp_header.set_window(cli.window);
-                    tcp_header.set_data_offset(5);
-
-                    tcp_header.set_checksum(0);
-
-                    let checksum = tcp_ipv4_checksum(&tcp_header.to_immutable(), &src_ip, &dst_ip);
-                    tcp_header.set_checksum(checksum);
-                } else if proto == IpNextHeaderProtocols::Udp {
-                    let mut udp_header =
-                        MutableUdpPacket::new(&mut packet[IP_HEADER_SIZE as usize..packet_size])
-                            .unwrap();
-
-                    udp_header.set_source(src_port);
-                    udp_header.set_destination(dst_port);
-
-                    udp_header.set_length(UDP_HEADER_SIZE + data_size as u16);
-
-                    udp_header.set_checksum(0);
-
-                    let checksum = udp_ipv4_checksum(&udp_header.to_immutable(), &src_ip, &dst_ip);
-                    udp_header.set_checksum(checksum);
-                }
-            } else if proto == IpNextHeaderProtocols::Icmp {
+                let checksum = udp_ipv4_checksum(&udp_header.to_immutable(), &src_ip, &dst_ip);
+                udp_header.set_checksum(checksum);
+            }
+            IpNextHeaderProtocols::Icmp => {
                 let mut icmp_packet =
                     MutableIcmpPacket::new(&mut packet[IP_HEADER_SIZE as usize..packet_size])
                         .unwrap();
@@ -204,57 +256,26 @@ pub fn build_ipv4_packet(
                 icmp_packet.set_checksum(0);
 
                 let mut checksum = Checksum::new();
-                checksum.add_bytes(&icmp_packet.packet());
+                checksum.add_bytes(icmp_packet.packet());
 
-                let checksum_value = checksum.checksum();
-                let checksum_value = u16::from_be_bytes(checksum_value);
-
-                icmp_packet.set_checksum(checksum_value);
+                icmp_packet.set_checksum(u16::from_be_bytes(checksum.checksum()));
             }
+            _ => {}
+        }
 
-            let mut tmp_packet = packet.split_at_mut(packet_size).0;
+        let mut ip_header = MutableIpv4Packet::new(&mut packet[..packet_size]).unwrap();
+        let checksum = checksum(&ip_header.to_immutable());
+        ip_header.set_checksum(checksum);
 
-            let mut ip_header = MutableIpv4Packet::new(&mut tmp_packet).unwrap();
-            let checksum = checksum(&ip_header.to_immutable());
-            ip_header.set_checksum(checksum);
+        debug!("{:#?}", ip_header);
 
-            debug!("{:#?}", ip_header);
+        if tx.send_to(&ip_header, IpAddr::V4(dst_ip)).is_err() {
+            error!("Failed to send packet to {:#?}", ip_header);
+            return None;
+        }
 
-            if tx
-                .send_to(&ip_header, std::net::IpAddr::V4(dst_ip))
-                .is_err()
-            {
-                error!("Failed to send packet to {:#?}", ip_header);
-                continue;
-            }
-
-            packets.fetch_add(1, Ordering::SeqCst);
-            bytes.fetch_add(packet_size as u64, Ordering::SeqCst);
-
-            if let Some(duration) = cli.duration {
-                if start_time.elapsed() >= duration {
-                    break;
-                }
-            }
-
-            if cli.flood {
-                continue;
-            }
-
-            if let Some(cli_cont) = cli.count {
-                count += 1;
-                if count >= cli_cont {
-                    break;
-                }
-            }
-
-            thread::sleep(cli.interval);
-        },
-        Err(e) => panic!(
-            "An error occurred when creating the datalink channel: {}",
-            e
-        ),
-    }
+        Some(packet_size as u64)
+    });
 }
 
 /// Wraps an arbitrary byte slice so it can be handed to `send_to`, which is
@@ -284,19 +305,6 @@ pub fn build_ipv6_packet(
         IpNextHeaderProtocols::Udp => UDP_HEADER_SIZE,
         _ => 0,
     };
-
-    let mut rng = StdRng::from_rng(&mut rand::rng());
-
-    let mut packet = [0u8; MAX_PACKET_SIZE as usize];
-
-    let (_, body) = packet.split_at_mut(header_size as usize);
-
-    if let Some(fill_data) = cli.fill_data {
-        body.fill(fill_data as u8);
-    }
-
-    let mut count = 0;
-    let start_time = Instant::now();
 
     let (mut tx, _) = match transport_channel(0, Layer4(TransportProtocol::Ipv6(proto))) {
         Ok(channel) => channel,
@@ -328,68 +336,30 @@ pub fn build_ipv6_packet(
         );
     }
 
-    loop {
-        let data_size = cli
-            .data
-            .as_ref()
-            .map(|i| i.get_random_value(&mut rng))
-            .unwrap_or(0);
+    drive(&cli, header_size, packets, bytes, |rng, packet| {
+        let data_size = random_data_size(&cli, rng);
 
         let dst_ip = cli
             .dst_ip
             .as_ref()
-            .map(|i| i.random_ipv6(&mut rng))
-            .unwrap_or_else(|| random_public_ipv6(&mut rng));
+            .map(|i| i.random_ipv6(rng))
+            .unwrap_or_else(|| random_public_ipv6(rng));
 
         let packet_size = (header_size + data_size) as usize;
 
-        if proto == IpNextHeaderProtocols::Tcp || proto == IpNextHeaderProtocols::Udp {
-            let src_port = cli
-                .src_port
-                .as_ref()
-                .map(|i| i.get_random_value(&mut rng))
-                .unwrap_or_else(|| rng.random());
-
-            let dst_port = cli
-                .dst_port
-                .as_ref()
-                .map(|i| i.get_random_value(&mut rng))
-                .unwrap_or_else(|| rng.random());
-
-            if proto == IpNextHeaderProtocols::Tcp {
+        // The kernel fills the transport checksum (see IPV6_CHECKSUM above).
+        match proto {
+            IpNextHeaderProtocols::Tcp => {
+                let (src_port, dst_port) = random_ports(&cli, rng);
                 let mut tcp_header = MutableTcpPacket::new(&mut packet[..packet_size]).unwrap();
-
-                tcp_header.set_source(src_port);
-                tcp_header.set_destination(dst_port);
-
-                if let Some(ack_seq) = cli.ack_seq {
-                    tcp_header.set_acknowledgement(ack_seq);
-                } else {
-                    tcp_header.set_acknowledgement(rng.random());
-                }
-
-                if let Some(seq) = cli.seq {
-                    tcp_header.set_sequence(seq);
-                } else {
-                    tcp_header.set_sequence(rng.random());
-                }
-
-                tcp_header.set_flags(tcp_flags(&cli));
-                tcp_header.set_window(cli.window);
-                tcp_header.set_data_offset(5);
-
-                // The kernel fills the checksum (see IPV6_CHECKSUM above).
-                tcp_header.set_checksum(0);
-            } else {
-                let mut udp_header = MutableUdpPacket::new(&mut packet[..packet_size]).unwrap();
-
-                udp_header.set_source(src_port);
-                udp_header.set_destination(dst_port);
-                udp_header.set_length(UDP_HEADER_SIZE + data_size as u16);
-
-                // The kernel fills the checksum (see IPV6_CHECKSUM above).
-                udp_header.set_checksum(0);
+                build_tcp_header(&mut tcp_header, &cli, src_port, dst_port, rng);
             }
+            IpNextHeaderProtocols::Udp => {
+                let (src_port, dst_port) = random_ports(&cli, rng);
+                let mut udp_header = MutableUdpPacket::new(&mut packet[..packet_size]).unwrap();
+                build_udp_header(&mut udp_header, src_port, dst_port, data_size);
+            }
+            _ => {}
         }
 
         if tx
@@ -397,32 +367,9 @@ pub fn build_ipv6_packet(
             .is_err()
         {
             error!("Failed to send packet to {}", dst_ip);
-            continue;
+            return None;
         }
 
-        packets.fetch_add(1, Ordering::SeqCst);
-        bytes.fetch_add(
-            (IPV6_HEADER_SIZE as usize + packet_size) as u64,
-            Ordering::SeqCst,
-        );
-
-        if let Some(duration) = cli.duration {
-            if start_time.elapsed() >= duration {
-                break;
-            }
-        }
-
-        if cli.flood {
-            continue;
-        }
-
-        if let Some(cli_cont) = cli.count {
-            count += 1;
-            if count >= cli_cont {
-                break;
-            }
-        }
-
-        thread::sleep(cli.interval);
-    }
+        Some((IPV6_HEADER_SIZE as usize + packet_size) as u64)
+    });
 }
