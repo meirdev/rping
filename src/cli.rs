@@ -50,14 +50,12 @@ pub struct Cli {
     #[arg(long, group = "protocol", action = ArgAction::SetTrue, help = "ICMP mode")]
     pub icmp: bool,
 
-    #[arg(long, group = "protocol", action = ArgAction::SetTrue, help = "RAW IP mode")]
-    pub rawip: bool,
-
     #[arg(
         long,
-        help = "Protocol number for raw IP packets (e.g., 6 for TCP, 17 for UDP)"
+        group = "protocol",
+        help = "Send raw IP packets with this protocol number (e.g., 47 for GRE)"
     )]
-    pub ipproto: Option<u8>,
+    pub proto: Option<u8>,
 
     #[arg(long, num_args = 0.., help = "Destination port or port range (e.g.: 80, 1000-2000)")]
     pub dst_port: Option<Range<u16>>,

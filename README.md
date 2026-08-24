@@ -39,7 +39,7 @@ sudo rping -I eth0 --udp --dst-ip 192.168.1.1 --dst-port 53 -d 100-500
 Send raw IP packets with a custom protocol number (e.g. 47 for GRE) and a payload:
 
 ```bash
-sudo rping -I eth0 --rawip --ipproto 47 --dst-ip 192.168.1.1 -d 100
+sudo rping -I eth0 --proto 47 --dst-ip 192.168.1.1 -d 100
 ```
 
 ### Options
@@ -58,8 +58,7 @@ sudo rping -I eth0 --rawip --ipproto 47 --dst-ip 192.168.1.1 -d 100
 | `--tcp`       |       | TCP mode                                        |
 | `--udp`       |       | UDP mode                                        |
 | `--icmp`      |       | ICMP mode                                       |
-| `--rawip`     |       | Raw IP mode (custom protocol via `--ipproto`)   |
-| `--ipproto`   |       | IP protocol number for raw IP mode (e.g. 47)    |
+| `--proto`     |       | Raw IP protocol number (e.g. 47 for GRE)        |
 | `--dst-port`  |       | Destination port or range (e.g., 80, 1-1000)    |
 | `--src-port`  |       | Source port or range                            |
 | `--data`      | `-d`  | Data size in bytes or range                     |
