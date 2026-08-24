@@ -62,7 +62,7 @@ fn print_config(args: &Cli) {
     };
 
     let interface = args
-        .inteface
+        .interface
         .as_deref()
         .unwrap_or("default");
 

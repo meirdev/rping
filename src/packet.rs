@@ -35,6 +35,25 @@ use crate::random::random_public_ipv6;
 
 const MAX_PACKET_SIZE: u16 = u16::MAX;
 
+fn bind_to_interface(fd: libc::c_int, iface: &str) {
+    let ret = unsafe {
+        libc::setsockopt(
+            fd,
+            libc::SOL_SOCKET,
+            libc::SO_BINDTODEVICE,
+            iface.as_ptr() as *const libc::c_void,
+            iface.len() as libc::socklen_t,
+        )
+    };
+    if ret != 0 {
+        error!(
+            "Failed to bind to interface {}: {}",
+            iface,
+            std::io::Error::last_os_error()
+        );
+    }
+}
+
 const IP_HEADER_SIZE: u16 = 20;
 const IPV6_HEADER_SIZE: u16 = 40;
 const TCP_HEADER_SIZE: u16 = 20;
@@ -193,6 +212,10 @@ pub fn build_ipv4_packet(
         ),
     };
 
+    if let Some(iface) = cli.interface.as_deref() {
+        bind_to_interface(tx.socket.fd, iface);
+    }
+
     drive(&cli, header_size, packets, bytes, |rng, packet| {
         let data_size = random_data_size(&cli, rng);
 
@@ -313,6 +336,10 @@ pub fn build_ipv6_packet(
             e
         ),
     };
+
+    if let Some(iface) = cli.interface.as_deref() {
+        bind_to_interface(tx.socket.fd, iface);
+    }
 
     // The hop limit (TTL) is set on the socket, not per packet, because the
     // kernel builds the IPv6 header.
