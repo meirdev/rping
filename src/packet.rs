@@ -163,12 +163,10 @@ fn drive<F>(
     let start_time = Instant::now();
 
     loop {
-        let Some(sent_bytes) = send_one(&mut rng, &mut packet) else {
-            continue;
-        };
-
-        packets.fetch_add(1, Ordering::SeqCst);
-        bytes.fetch_add(sent_bytes, Ordering::SeqCst);
+        if let Some(sent_bytes) = send_one(&mut rng, &mut packet) {
+            packets.fetch_add(1, Ordering::SeqCst);
+            bytes.fetch_add(sent_bytes, Ordering::SeqCst);
+        }
 
         if let Some(duration) = cli.duration {
             if start_time.elapsed() >= duration {
