@@ -38,10 +38,18 @@ fn resolve_proto(args: &Cli, ipv6: bool) -> IpNextHeaderProtocol {
         IpNextHeaderProtocols::Udp
     } else if args.icmp {
         IpNextHeaderProtocols::Icmp
-    } else if let Some(proto) = args.proto {
+    } else if args.rawip {
+        match args.ipproto {
+            Some(proto) => IpNextHeaderProtocol(proto),
+            None => {
+                eprintln!("RAW IP mode requires a protocol number. Use --ipproto <NUM>.");
+                std::process::exit(1);
+            }
+        }
+    } else if let Some(proto) = args.ipproto {
         IpNextHeaderProtocol(proto)
     } else {
-        eprintln!("No protocol specified. Use --tcp, --udp, or --proto.");
+        eprintln!("No protocol specified. Use --tcp, --udp, --icmp, --rawip, or --ipproto.");
         std::process::exit(1);
     }
 }
@@ -54,17 +62,14 @@ fn print_config(args: &Cli) {
     } else if args.icmp {
         "ICMP"
     } else if args.rawip {
-        "RAW IP"
-    } else if let Some(p) = args.proto {
+        &format!("RAW IP (proto {})", args.ipproto.unwrap_or(0))
+    } else if let Some(p) = args.ipproto {
         &format!("proto {}", p)
     } else {
         "None"
     };
 
-    let interface = args
-        .interface
-        .as_deref()
-        .unwrap_or("default");
+    let interface = args.interface.as_deref().unwrap_or("default");
 
     let src_ip = args
         .src_ip
