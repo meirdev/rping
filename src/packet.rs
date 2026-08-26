@@ -12,9 +12,12 @@ use pnet::packet::ip::IpNextHeaderProtocol;
 use pnet::packet::ip::IpNextHeaderProtocols;
 use pnet::packet::ipv4::MutableIpv4Packet;
 use pnet::packet::ipv4::checksum;
+use pnet::packet::ipv6::MutableIpv6Packet;
 use pnet::packet::tcp::MutableTcpPacket;
 use pnet::packet::tcp::TcpFlags;
+use pnet::packet::tcp::ipv6_checksum as tcp_ipv6_checksum;
 use pnet::packet::udp::MutableUdpPacket;
+use pnet::packet::udp::ipv6_checksum as udp_ipv6_checksum;
 use pnet::transport::TransportChannelType::Layer3;
 use pnet::transport::TransportChannelType::Layer4;
 use pnet::transport::TransportProtocol;
@@ -362,12 +365,10 @@ pub fn build_ipv6_packet(
     packets: &Arc<AtomicU64>,
     bytes: &Arc<AtomicU64>,
 ) {
-    // For IPv6 the kernel builds the IP header, so the buffer only holds the
-    // transport segment.
     let header_size = match proto {
-        IpNextHeaderProtocols::Tcp => TCP_HEADER_SIZE,
-        IpNextHeaderProtocols::Udp => UDP_HEADER_SIZE,
-        _ => 0,
+        IpNextHeaderProtocols::Tcp => IPV6_HEADER_SIZE + TCP_HEADER_SIZE,
+        IpNextHeaderProtocols::Udp => IPV6_HEADER_SIZE + UDP_HEADER_SIZE,
+        _ => IPV6_HEADER_SIZE,
     };
 
     let (mut tx, _) = match transport_channel(0, Layer4(TransportProtocol::Ipv6(proto))) {
@@ -382,30 +383,31 @@ pub fn build_ipv6_packet(
         bind_to_interface(tx.socket.fd, iface);
     }
 
-    // The hop limit (TTL) is set on the socket, not per packet, because the
-    // kernel builds the IPv6 header.
-    let _ = tx.set_ttl(cli.ttl);
-
-    // The source address can't be spoofed on an IPv6 raw socket, so we let the
-    // kernel compute the transport checksum (it needs the source it selects) by
-    // pointing IPV6_CHECKSUM at the checksum field's offset.
-    let checksum_offset: libc::c_int = match proto {
-        IpNextHeaderProtocols::Tcp => 16,
-        IpNextHeaderProtocols::Udp => 6,
-        _ => -1,
-    };
-    unsafe {
+    let header_included: libc::c_int = 1;
+    let result = unsafe {
         libc::setsockopt(
             tx.socket.fd,
             libc::IPPROTO_IPV6,
-            libc::IPV6_CHECKSUM,
-            &checksum_offset as *const libc::c_int as *const libc::c_void,
+            libc::IPV6_HDRINCL,
+            &header_included as *const libc::c_int as *const libc::c_void,
             std::mem::size_of::<libc::c_int>() as libc::socklen_t,
+        )
+    };
+    if result != 0 {
+        panic!(
+            "Failed to enable IPv6 header inclusion: {}",
+            std::io::Error::last_os_error()
         );
     }
 
     drive(&cli, header_size, packets, bytes, |rng, packet| {
         let data_size = random_data_size(&cli, rng);
+
+        let src_ip = cli
+            .src_ip
+            .as_ref()
+            .map(|i| i.random_ipv6(rng))
+            .unwrap_or_else(|| random_public_ipv6(rng));
 
         let dst_ip = cli
             .dst_ip
@@ -415,22 +417,43 @@ pub fn build_ipv6_packet(
 
         let packet_size = (header_size + data_size) as usize;
 
-        // The kernel fills the transport checksum (see IPV6_CHECKSUM above).
+        {
+            let mut ip_header = MutableIpv6Packet::new(&mut packet[..packet_size]).unwrap();
+            ip_header.set_version(6);
+            ip_header.set_payload_length(header_size + data_size - IPV6_HEADER_SIZE);
+            ip_header.set_next_header(proto);
+            ip_header.set_hop_limit(cli.ttl);
+            ip_header.set_source(src_ip);
+            ip_header.set_destination(dst_ip);
+        }
+
         match proto {
             IpNextHeaderProtocols::Tcp => {
                 let (src_port, dst_port) = random_ports(&cli, rng);
-                let mut tcp_header = MutableTcpPacket::new(&mut packet[..packet_size]).unwrap();
+                let mut tcp_header =
+                    MutableTcpPacket::new(&mut packet[IPV6_HEADER_SIZE as usize..packet_size])
+                        .unwrap();
                 build_tcp_header(&mut tcp_header, &cli, src_port, dst_port, rng);
+                let checksum = tcp_ipv6_checksum(&tcp_header.to_immutable(), &src_ip, &dst_ip);
+                tcp_header.set_checksum(checksum);
             }
             IpNextHeaderProtocols::Udp => {
                 let (src_port, dst_port) = random_ports(&cli, rng);
-                let mut udp_header = MutableUdpPacket::new(&mut packet[..packet_size]).unwrap();
+                let mut udp_header =
+                    MutableUdpPacket::new(&mut packet[IPV6_HEADER_SIZE as usize..packet_size])
+                        .unwrap();
                 build_udp_header(&mut udp_header, src_port, dst_port, data_size);
+                let checksum = udp_ipv6_checksum(&udp_header.to_immutable(), &src_ip, &dst_ip);
+                udp_header.set_checksum(checksum);
             }
             _ => {}
         }
 
-        if let Err(err) = tx.send_to(RawPacket(&packet[..packet_size]), IpAddr::V6(dst_ip)) {
+        let ip_header = MutableIpv6Packet::new(&mut packet[..packet_size]).unwrap();
+
+        debug!("{:#?}", ip_header);
+
+        if let Err(err) = tx.send_to(RawPacket(ip_header.packet()), IpAddr::V6(dst_ip)) {
             if is_transient_send_error(&err) {
                 debug!("Failed to send packet to {}: {}", dst_ip, err);
             } else {
@@ -439,6 +462,6 @@ pub fn build_ipv6_packet(
             return None;
         }
 
-        Some((IPV6_HEADER_SIZE as usize + packet_size) as u64)
+        Some(packet_size as u64)
     });
 }

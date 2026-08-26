@@ -24,6 +24,12 @@ Send TCP packets with random source IP from a subnet:
 sudo rping -I eth0 --tcp --src-ip 10.0.0.0/8 --dst-ip 192.168.1.1 --dst-port 443
 ```
 
+IPv6 source spoofing works the same way, including CIDR ranges:
+
+```bash
+sudo rping -I eth0 --tcp --src-ip 2001:db8:1::/64 --dst-ip 2001:db8:2::1 --dst-port 443
+```
+
 Send UDP packets to random ports in a range:
 
 ```bash
