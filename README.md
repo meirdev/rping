@@ -1,5 +1,12 @@
 # rping
 
+<div align="center">
+  <img src="logo.png" width="300" />
+</div>
+
+&nbsp;
+&nbsp;
+
 A packet generation tool designed for simulating high-volume network traffic.
 
 ## Usage
