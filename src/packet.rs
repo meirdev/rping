@@ -1,3 +1,4 @@
+use std::fs;
 use std::net::IpAddr;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
@@ -154,10 +155,23 @@ fn drive<F>(
 
     let mut packet = [0u8; MAX_PACKET_SIZE as usize];
 
-    if let Some(fill_data) = cli.fill_data {
-        let (_, body) = packet.split_at_mut(header_size as usize);
-        body.fill(fill_data as u8);
-    }
+    let file_data = match cli.file.as_ref() {
+        Some(path) => match fs::read(path) {
+            Ok(data) => Some(data),
+            Err(err) => {
+                error!("Failed to read payload file {}: {}", path.display(), err);
+                return;
+            }
+        },
+        None => None,
+    };
+
+    initialize_payload(
+        &mut packet,
+        header_size as usize,
+        cli.fill_data,
+        file_data.as_deref(),
+    );
 
     let mut count = 0u32;
     let start_time = Instant::now();
@@ -186,6 +200,23 @@ fn drive<F>(
         }
 
         thread::sleep(cli.interval);
+    }
+}
+
+fn initialize_payload(
+    packet: &mut [u8],
+    header_size: usize,
+    fill_data: Option<char>,
+    file_data: Option<&[u8]>,
+) {
+    let payload = &mut packet[header_size..];
+
+    if let Some(file_data) = file_data {
+        payload.fill(0);
+        let copy_len = payload.len().min(file_data.len());
+        payload[..copy_len].copy_from_slice(&file_data[..copy_len]);
+    } else {
+        payload.fill(fill_data.unwrap_or('X') as u8);
     }
 }
 

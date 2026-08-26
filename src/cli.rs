@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use clap::ArgAction;
 use clap::Parser;
 
@@ -111,10 +113,17 @@ pub struct Cli {
 
     #[arg(
         long,
-        help = "Fill data with a specific character (ASCII only)",
-        default_value = "X"
+        conflicts_with = "file",
+        help = "Fill data with a specific character (ASCII only; default: X)"
     )]
     pub fill_data: Option<char>,
+
+    #[arg(
+        long,
+        conflicts_with = "fill_data",
+        help = "Fill packet data from a file, truncating or padding with NULL bytes"
+    )]
+    pub file: Option<PathBuf>,
 
     #[arg(short = 'C', long, default_value_t = 8, help = "Set ICMP type")]
     pub icmptype: u8,

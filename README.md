@@ -42,6 +42,12 @@ Send raw IP packets with a custom protocol number (e.g. 47 for GRE) and a payloa
 sudo rping -I eth0 --proto 47 --dst-ip 192.168.1.1 -d 100
 ```
 
+Fill a 1,024-byte UDP payload from a file (the file is truncated or padded with NULL bytes):
+
+```bash
+sudo rping -I eth0 --udp --dst-ip 192.168.1.1 -d 1024 --file payload.bin
+```
+
 ### Options
 
 | Option        | Short | Description                                     |
@@ -63,6 +69,7 @@ sudo rping -I eth0 --proto 47 --dst-ip 192.168.1.1 -d 100
 | `--src-port`  |       | Source port or range                            |
 | `--data`      | `-d`  | Data size in bytes or range                     |
 | `--fill-data` |       | Fill data with specific ASCII char (default: X) |
+| `--file`      |       | Fill data from a file; truncate or NULL-pad it  |
 
 ### TCP Flags
 
