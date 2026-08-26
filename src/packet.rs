@@ -290,13 +290,25 @@ pub fn build_ipv4_packet(
 
         debug!("{:#?}", ip_header);
 
-        if tx.send_to(&ip_header, IpAddr::V4(dst_ip)).is_err() {
-            error!("Failed to send packet to {:#?}", ip_header);
+        if let Err(err) = tx.send_to(&ip_header, IpAddr::V4(dst_ip)) {
+            if is_transient_send_error(&err) {
+                debug!("Failed to send packet to {:#?}: {}", ip_header, err);
+            } else {
+                error!("Failed to send packet to {:#?}: {}", ip_header, err);
+            }
             return None;
         }
 
         Some(packet_size as u64)
     });
+}
+
+/// Returns `true` when a send failure is a transient, expected back-pressure
+/// condition (the socket buffer is full / would block) rather than a real
+/// error. These are logged at `debug` instead of `error`.
+fn is_transient_send_error(err: &std::io::Error) -> bool {
+    matches!(err.kind(), std::io::ErrorKind::WouldBlock)
+        || err.raw_os_error() == Some(libc::ENOBUFS)
 }
 
 /// Wraps an arbitrary byte slice so it can be handed to `send_to`, which is
@@ -387,11 +399,12 @@ pub fn build_ipv6_packet(
             _ => {}
         }
 
-        if tx
-            .send_to(RawPacket(&packet[..packet_size]), IpAddr::V6(dst_ip))
-            .is_err()
-        {
-            error!("Failed to send packet to {}", dst_ip);
+        if let Err(err) = tx.send_to(RawPacket(&packet[..packet_size]), IpAddr::V6(dst_ip)) {
+            if is_transient_send_error(&err) {
+                debug!("Failed to send packet to {}: {}", dst_ip, err);
+            } else {
+                error!("Failed to send packet to {}: {}", dst_ip, err);
+            }
             return None;
         }
 
