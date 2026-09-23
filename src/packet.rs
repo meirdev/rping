@@ -31,8 +31,7 @@ use rand::Rng;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 
-use crate::checksum::tcp_ipv4_checksum;
-use crate::checksum::udp_ipv4_checksum;
+use crate::checksum::IncrementalChecksum;
 use crate::cli::Cli;
 use crate::random::random_public_ipv4;
 use crate::random::random_public_ipv6;
@@ -248,6 +247,8 @@ pub fn build_ipv4_packet(
         bind_to_interface(tx.socket.fd, iface);
     }
 
+    let mut checksummer = IncrementalChecksum::new();
+
     drive(&cli, header_size, packets, bytes, |rng, packet| {
         let data_size = random_data_size(&cli, rng);
 
@@ -286,8 +287,9 @@ pub fn build_ipv4_packet(
 
                 build_tcp_header(&mut tcp_header, &cli, src_port, dst_port, rng);
 
-                let checksum = tcp_ipv4_checksum(&tcp_header.to_immutable(), &src_ip, &dst_ip);
-                tcp_header.set_checksum(checksum);
+                let sum =
+                    checksummer.tcp_ipv4(&tcp_header.to_immutable(), &src_ip, &dst_ip, packet_size);
+                tcp_header.set_checksum(sum);
             }
             IpNextHeaderProtocols::Udp => {
                 let (src_port, dst_port) = random_ports(&cli, rng);
@@ -297,8 +299,19 @@ pub fn build_ipv4_packet(
 
                 build_udp_header(&mut udp_header, src_port, dst_port, data_size);
 
-                let checksum = udp_ipv4_checksum(&udp_header.to_immutable(), &src_ip, &dst_ip);
-                udp_header.set_checksum(checksum);
+                if cli.no_checksum {
+                    // IPv4 UDP: a zero checksum means "not computed"; receivers
+                    // skip verification.
+                    udp_header.set_checksum(0);
+                } else {
+                    let sum = checksummer.udp_ipv4(
+                        &udp_header.to_immutable(),
+                        &src_ip,
+                        &dst_ip,
+                        packet_size,
+                    );
+                    udp_header.set_checksum(sum);
+                }
             }
             IpNextHeaderProtocols::Icmp => {
                 let mut icmp_packet =
