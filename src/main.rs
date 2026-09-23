@@ -245,6 +245,12 @@ fn main() {
         }
     }
 
+    if args.no_checksum && (!args.udp || ipv6) {
+        eprintln!(
+            "Warning: --no-checksum only applies to IPv4 UDP; the checksum will still be computed."
+        );
+    }
+
     print_config(&args);
 
     let start_time = Instant::now();

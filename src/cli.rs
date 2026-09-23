@@ -130,4 +130,11 @@ pub struct Cli {
 
     #[arg(short = 'K', long, default_value_t = 0, help = "Set ICMP code")]
     pub icmpcode: u8,
+
+    #[arg(
+        long,
+        action = ArgAction::SetTrue,
+        help = "Skip the UDP checksum (send 0; IPv4 UDP only)"
+    )]
+    pub no_checksum: bool,
 }
