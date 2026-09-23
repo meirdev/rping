@@ -76,6 +76,7 @@ sudo rping -I eth0 --udp --dst-ip 192.168.1.1 -d 1024 --file payload.bin
 | `--ttl`       | `-t`  | Time to live (default: 64)                      |
 | `--tcp`       |       | TCP mode                                        |
 | `--udp`       |       | UDP mode                                        |
+| `--no-checksum` |     | Skip the UDP checksum (send 0; IPv4 UDP only)   |
 | `--icmp`      |       | ICMP mode                                       |
 | `--proto`     |       | Raw IP protocol number (e.g. 47 for GRE)        |
 | `--dst-port`  |       | Destination port or range (e.g., 80, 1-1000)    |
