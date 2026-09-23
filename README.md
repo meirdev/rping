@@ -63,27 +63,27 @@ sudo rping -I eth0 --udp --dst-ip 192.168.1.1 -d 1024 --file payload.bin
 
 ### Options
 
-| Option        | Short | Description                                     |
-| ------------- | ----- | ----------------------------------------------- |
-| `--interface` | `-I`  | Network interface to use                        |
-| `--quiet`     | `-q`  | Disable real-time statistics display            |
-| `--interval`  | `-i`  | Interval between packets (default: 100ms)       |
-| `--flood`     |       | Send packets as fast as possible                |
-| `--count`     | `-c`  | Number of packets to send                       |
-| `--duration`  |       | Duration to run (e.g., 10s, 1m, 1h)             |
-| `--dst-ip`    |       | Destination IP or CIDR (e.g., 10.0.0.0/8)       |
-| `--src-ip`    |       | Source IP or CIDR                               |
-| `--ttl`       | `-t`  | Time to live (default: 64)                      |
-| `--tcp`       |       | TCP mode                                        |
-| `--udp`       |       | UDP mode                                        |
-| `--no-checksum` |     | Skip the UDP checksum (send 0; IPv4 UDP only)   |
-| `--icmp`      |       | ICMP mode                                       |
-| `--proto`     |       | Raw IP protocol number (e.g. 47 for GRE)        |
-| `--dst-port`  |       | Destination port or range (e.g., 80, 1-1000)    |
-| `--src-port`  |       | Source port or range                            |
-| `--data`      | `-d`  | Data size in bytes or range                     |
-| `--fill-data` |       | Fill data with specific ASCII char (default: X) |
-| `--file`      |       | Fill data from a file; truncate or NULL-pad it  |
+| Option          | Short | Description                                     |
+| --------------- | ----- | ----------------------------------------------- |
+| `--interface`   | `-I`  | Network interface to use                        |
+| `--quiet`       | `-q`  | Disable real-time statistics display            |
+| `--interval`    | `-i`  | Interval between packets (default: 100ms)       |
+| `--flood`       |       | Send packets as fast as possible                |
+| `--count`       | `-c`  | Number of packets to send                       |
+| `--duration`    |       | Duration to run (e.g., 10s, 1m, 1h)             |
+| `--dst-ip`      |       | Destination IP or CIDR (e.g., 10.0.0.0/8)       |
+| `--src-ip`      |       | Source IP or CIDR                               |
+| `--ttl`         | `-t`  | Time to live (default: 64)                      |
+| `--tcp`         |       | TCP mode                                        |
+| `--udp`         |       | UDP mode                                        |
+| `--no-checksum` |       | Skip the UDP checksum (send 0; IPv4 UDP only)   |
+| `--icmp`        |       | ICMP mode                                       |
+| `--proto`       |       | Raw IP protocol number (e.g. 47 for GRE)        |
+| `--dst-port`    |       | Destination port or range (e.g., 80, 1-1000)    |
+| `--src-port`    |       | Source port or range                            |
+| `--data`        | `-d`  | Data size in bytes or range                     |
+| `--fill-data`   |       | Fill data with specific ASCII char (default: X) |
+| `--file`        |       | Fill data from a file; truncate or NULL-pad it  |
 
 ### TCP Flags
 
