@@ -179,6 +179,23 @@ fn print_config(args: &Cli) {
     let _ = execute!(stdout(), Print("\n"));
 }
 
+fn format_bps(bps: u64) -> String {
+    const UNITS: [&str; 5] = ["bps", "Kbps", "Mbps", "Gbps", "Tbps"];
+
+    let mut value = bps as f64;
+    let mut unit = 0;
+    while value >= 1000.0 && unit < UNITS.len() - 1 {
+        value /= 1000.0;
+        unit += 1;
+    }
+
+    if unit == 0 {
+        format!("{} {}", bps, UNITS[unit])
+    } else {
+        format!("{:.2} {}", value, UNITS[unit])
+    }
+}
+
 fn print_stats<W: Write>(
     out: &mut W,
     pkt_count: u64,
@@ -193,7 +210,7 @@ fn print_stats<W: Write>(
         0
     };
     let bps = if elapsed_secs > 0.0 {
-        (byte_count as f64 / elapsed_secs) as u64
+        (byte_count as f64 * 8.0 / elapsed_secs) as u64
     } else {
         0
     };
@@ -202,11 +219,11 @@ fn print_stats<W: Write>(
         out,
         MoveToColumn(0),
         Print(format!(
-            "{} packets | {} pps | {} | {}/s | {}",
+            "{} packets | {} pps | {} | {} | {}",
             pkt_count.to_formatted_string(&Locale::en),
             pps.to_formatted_string(&Locale::en),
-            ByteSize(byte_count),
-            ByteSize(bps),
+            ByteSize(byte_count).display().si(),
+            format_bps(bps),
             FancyDuration(Duration::from_secs(elapsed.as_secs()))
         )),
         Clear(ClearType::UntilNewLine),
