@@ -31,10 +31,10 @@ pub struct Cli {
     #[arg(long, group = "limit", value_parser = |arg: &str| duration_str::parse(arg), help = "Duration to run (e.g., 10s, 1m, 1h)")]
     pub duration: Option<std::time::Duration>,
 
-    #[arg(long, num_args = 0.., help = "Destination IP address or network (e.g.: 10.0.0.0/8, 10.0.1.15)")]
+    #[arg(long, num_args = 0.., help = "Destination IP, network, or range (e.g.: 10.0.0.0/8, 10.0.1.15, 10.0.1.3-10.0.2.6)")]
     pub dst_ip: Option<Ip>,
 
-    #[arg(long, num_args = 0.., help = "Source IP address or network (e.g.: 10.0.0.0/8, 10.0.1.15)")]
+    #[arg(long, num_args = 0.., help = "Source IP, network, or range (e.g.: 10.0.0.0/8, 10.0.1.15, 10.0.1.3-10.0.2.6)")]
     pub src_ip: Option<Ip>,
 
     #[arg(short = 't', long, default_value_t = 64, help = "Time to live (TTL)")]
