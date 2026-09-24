@@ -43,6 +43,19 @@ pub struct Cli {
     #[arg(long, help = "IP id")]
     pub id: Option<u16>,
 
+    #[arg(short = 'y', long, conflicts_with_all = ["morefrag", "fragoff"], help = "Set Don't Fragment (IPv4 only)")]
+    pub dontfrag: bool,
+
+    #[arg(
+        short = 'x',
+        long,
+        help = "Set More Fragments without splitting the packet (IPv4 only)"
+    )]
+    pub morefrag: bool,
+
+    #[arg(short = 'g', long, value_parser = parse_fragment_offset, help = "Fragment offset in bytes, 0-65528 in multiples of 8 (IPv4 only)")]
+    pub fragoff: Option<u16>,
+
     #[arg(long, group = "protocol", action = ArgAction::SetTrue, help = "TCP mode")]
     pub tcp: bool,
 
@@ -137,4 +150,14 @@ pub struct Cli {
         help = "Skip the UDP checksum (send 0; IPv4 UDP only)"
     )]
     pub no_checksum: bool,
+}
+
+fn parse_fragment_offset(value: &str) -> Result<u16, String> {
+    let offset = value
+        .parse::<u16>()
+        .map_err(|_| "Fragment offset must be between 0 and 65528 bytes".to_string())?;
+    if offset % 8 != 0 {
+        return Err("Fragment offset must be a multiple of 8 bytes (maximum 65528)".to_string());
+    }
+    Ok(offset)
 }

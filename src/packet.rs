@@ -10,6 +10,7 @@ use log::debug;
 use log::error;
 use pnet::packet::ip::IpNextHeaderProtocol;
 use pnet::packet::ip::IpNextHeaderProtocols;
+use pnet::packet::ipv4::Ipv4Flags;
 use pnet::packet::ipv4::MutableIpv4Packet;
 use pnet::packet::ipv4::checksum;
 use pnet::packet::ipv6::MutableIpv6Packet;
@@ -222,6 +223,19 @@ fn initialize_payload(
     }
 }
 
+fn set_ipv4_fragmentation(header: &mut MutableIpv4Packet, cli: &Cli) {
+    let mut flags = 0;
+    if cli.dontfrag {
+        flags |= Ipv4Flags::DontFragment;
+    }
+    if cli.morefrag {
+        flags |= Ipv4Flags::MoreFragments;
+    }
+    header.set_flags(flags);
+    // IPv4 encodes the offset in eight-byte units.
+    header.set_fragment_offset(cli.fragoff.unwrap_or(0) / 8);
+}
+
 pub fn build_ipv4_packet(
     cli: Cli,
     proto: IpNextHeaderProtocol,
@@ -276,6 +290,7 @@ pub fn build_ipv4_packet(
             ip_header.set_total_length(header_size + data_size);
             ip_header.set_identification(cli.id.unwrap_or_else(|| rng.random()));
             ip_header.set_ttl(cli.ttl);
+            set_ipv4_fragmentation(&mut ip_header, &cli);
         }
 
         match proto {

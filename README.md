@@ -85,6 +85,14 @@ sudo rping -I eth0 --udp --dst-ip 192.168.1.1 -d 1024 --file payload.bin
 | `--fill-data`   |       | Fill data with specific ASCII char (default: X) |
 | `--file`        |       | Fill data from a file; truncate or NULL-pad it  |
 
+### IPv4 Fragmentation Controls
+
+| Option       | Short | Description                                                  |
+| ------------ | ----- | ------------------------------------------------------------ |
+| `--dontfrag` | `-y`  | Set Don't Fragment (DF)                                      |
+| `--morefrag` | `-x`  | Set More Fragments (MF)                                      |
+| `--fragoff`  | `-g`  | Fragment offset in bytes, from 0 to 65528, in multiples of 8 |
+
 ### TCP Flags
 
 | Option      | Short | Description                   |

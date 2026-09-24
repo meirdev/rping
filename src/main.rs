@@ -255,6 +255,11 @@ fn main() {
 
     let proto = resolve_proto(&args, ipv6);
 
+    if ipv6 && (args.dontfrag || args.morefrag || args.fragoff.is_some()) {
+        eprintln!("--dontfrag, --morefrag, and --fragoff are currently supported only for IPv4.");
+        std::process::exit(1);
+    }
+
     if let Some(fill_data) = args.fill_data {
         if !fill_data.is_ascii() {
             eprintln!("Fill data must be an ASCII character.");
