@@ -39,6 +39,17 @@ fn resolve_proto(args: &Cli, ipv6: bool) -> IpNextHeaderProtocol {
     } else if args.icmp {
         IpNextHeaderProtocols::Icmp
     } else if let Some(proto) = args.proto {
+        let hint = match proto {
+            6 => Some(("TCP", "--tcp")),
+            17 => Some(("UDP", "--udp")),
+            1 if !ipv6 => Some(("ICMP", "--icmp")),
+            _ => None,
+        };
+        if let Some((name, flag)) = hint {
+            eprintln!(
+                "note: --proto {proto} sends raw IP packets without a {name} header (did you mean {flag}?)"
+            );
+        }
         IpNextHeaderProtocol(proto)
     } else {
         eprintln!("No protocol specified. Use --tcp, --udp, --icmp, or --proto.");
@@ -267,9 +278,9 @@ fn main() {
         }
     }
 
-    if args.no_checksum && (!args.udp || ipv6) {
+    if args.no_checksum && ipv6 {
         eprintln!(
-            "Warning: --no-checksum only applies to IPv4 UDP; the checksum will still be computed."
+            "Warning: --no-checksum only applies to IPv4; the UDP checksum is mandatory in IPv6 and will still be computed."
         );
     }
 

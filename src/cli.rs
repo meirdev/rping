@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use clap::ArgAction;
+use clap::ArgGroup;
 use clap::Parser;
 
 use crate::ip::Ip;
@@ -8,6 +9,10 @@ use crate::range::Range;
 
 #[derive(Parser, Debug, Clone)]
 #[command(version)]
+#[command(group(ArgGroup::new("ports_proto").args(["tcp", "udp"])))]
+#[command(group(ArgGroup::new("tcp_proto").arg("tcp")))]
+#[command(group(ArgGroup::new("udp_proto").arg("udp")))]
+#[command(group(ArgGroup::new("icmp_proto").arg("icmp")))]
 pub struct Cli {
     #[arg(short = 'I', long, help = "Network interface to use")]
     pub interface: Option<String>,
@@ -72,33 +77,34 @@ pub struct Cli {
     )]
     pub proto: Option<u8>,
 
-    #[arg(long, num_args = 0.., help = "Destination port or port range (e.g.: 80, 1000-2000)")]
+    #[arg(long, num_args = 0.., requires = "ports_proto", help = "Destination port or port range (e.g.: 80, 1000-2000)")]
     pub dst_port: Option<Range<u16>>,
 
-    #[arg(long, num_args = 0.., help = "Source port or port range (e.g.: 80, 1000-2000)")]
+    #[arg(long, num_args = 0.., requires = "ports_proto", help = "Source port or port range (e.g.: 80, 1000-2000)")]
     pub src_port: Option<Range<u16>>,
 
-    #[arg(short = 'F', long, action = ArgAction::SetTrue, help = "Set FIN flag")]
+    #[arg(short = 'F', long, requires = "tcp_proto", action = ArgAction::SetTrue, help = "Set FIN flag")]
     pub fin: bool,
 
-    #[arg(short = 'S', long, action = ArgAction::SetTrue, help = "Set SYN flag")]
+    #[arg(short = 'S', long, requires = "tcp_proto", action = ArgAction::SetTrue, help = "Set SYN flag")]
     pub syn: bool,
 
-    #[arg(short = 'R', long, action = ArgAction::SetTrue, help = "Set RST flag")]
+    #[arg(short = 'R', long, requires = "tcp_proto", action = ArgAction::SetTrue, help = "Set RST flag")]
     pub rst: bool,
 
-    #[arg(short = 'P', long, action = ArgAction::SetTrue, help = "Set PSH flag")]
+    #[arg(short = 'P', long, requires = "tcp_proto", action = ArgAction::SetTrue, help = "Set PSH flag")]
     pub psh: bool,
 
-    #[arg(short = 'A', long, action = ArgAction::SetTrue, help = "Set ACK flag")]
+    #[arg(short = 'A', long, requires = "tcp_proto", action = ArgAction::SetTrue, help = "Set ACK flag")]
     pub ack: bool,
 
-    #[arg(short = 'U', long, action = ArgAction::SetTrue, help = "Set URG flag")]
+    #[arg(short = 'U', long, requires = "tcp_proto", action = ArgAction::SetTrue, help = "Set URG flag")]
     pub urg: bool,
 
     #[arg(
         short = 'X',
         long,
+        requires = "tcp_proto",
         action = ArgAction::SetTrue,
         help = "Set X unused flag (0x40)"
     )]
@@ -107,18 +113,25 @@ pub struct Cli {
     #[arg(
         short = 'Y',
         long,
+        requires = "tcp_proto",
         action = ArgAction::SetTrue,
         help = "Set Y ununsed flag (0x80)"
     )]
     pub ymas: bool,
 
-    #[arg(short = 'w', long, default_value_t = 64, help = "Set TCP window size")]
+    #[arg(
+        short = 'w',
+        long,
+        requires = "tcp_proto",
+        default_value_t = 64,
+        help = "Set TCP window size"
+    )]
     pub window: u16,
 
-    #[arg(long, help = "Set TCP sequence number")]
+    #[arg(long, requires = "tcp_proto", help = "Set TCP sequence number")]
     pub seq: Option<u32>,
 
-    #[arg(long, help = "Set TCP acknowledgment number")]
+    #[arg(long, requires = "tcp_proto", help = "Set TCP acknowledgment number")]
     pub ack_seq: Option<u32>,
 
     #[arg(short = 'd', long, help = "Data size in bytes (e.g.: 100, 200-300)")]
@@ -138,15 +151,28 @@ pub struct Cli {
     )]
     pub file: Option<PathBuf>,
 
-    #[arg(short = 'C', long, default_value_t = 8, help = "Set ICMP type")]
+    #[arg(
+        short = 'C',
+        long,
+        requires = "icmp_proto",
+        default_value_t = 8,
+        help = "Set ICMP type"
+    )]
     pub icmptype: u8,
 
-    #[arg(short = 'K', long, default_value_t = 0, help = "Set ICMP code")]
+    #[arg(
+        short = 'K',
+        long,
+        requires = "icmp_proto",
+        default_value_t = 0,
+        help = "Set ICMP code"
+    )]
     pub icmpcode: u8,
 
     #[arg(
         long,
         action = ArgAction::SetTrue,
+        requires = "udp_proto",
         help = "Skip the UDP checksum (send 0; IPv4 UDP only)"
     )]
     pub no_checksum: bool,
