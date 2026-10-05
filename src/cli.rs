@@ -14,6 +14,9 @@ use crate::range::Range;
 #[command(group(ArgGroup::new("udp_proto").arg("udp")))]
 #[command(group(ArgGroup::new("icmp_proto").arg("icmp")))]
 pub struct Cli {
+    #[arg(long, exclusive = true, help = "Build the command interactively")]
+    pub ui: bool,
+
     #[arg(short = 'I', long, help = "Network interface to use")]
     pub interface: Option<String>,
 

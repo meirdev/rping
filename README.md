@@ -65,6 +65,7 @@ sudo rping -I eth0 --udp --dst-ip 192.168.1.1 -d 1024 --file payload.bin
 
 | Option          | Short | Description                                     |
 | --------------- | ----- | ----------------------------------------------- |
+| `--ui`          |       | Build the command interactively                 |
 | `--interface`   | `-I`  | Network interface to use                        |
 | `--quiet`       | `-q`  | Disable real-time statistics display            |
 | `--interval`    | `-i`  | Interval between packets (default: 100ms)       |
