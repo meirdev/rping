@@ -247,7 +247,11 @@ fn print_stats<W: Write>(
 fn main() {
     env_logger::init();
 
-    let args = Cli::parse();
+    let mut args = Cli::parse();
+
+    if args.ui {
+        args = Cli::try_parse_from(rping::ui::run()).unwrap_or_else(|e| e.exit());
+    }
 
     debug!("Options: {:?}", args);
 
