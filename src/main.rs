@@ -3,7 +3,6 @@ use std::io::stderr;
 use std::io::stdout;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
-use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::thread;
 use std::time::Duration;
@@ -25,6 +24,8 @@ use pnet::packet::ip::IpNextHeaderProtocols;
 use rping::cli::Cli;
 use rping::packet::build_ipv4_packet;
 use rping::packet::build_ipv6_packet;
+use rping::stats::Stats;
+use rping::stats::StatsSnapshot;
 
 fn resolve_proto(args: &Cli, ipv6: bool) -> IpNextHeaderProtocol {
     if ipv6 && args.icmp {
@@ -207,13 +208,13 @@ fn format_bps(bps: u64) -> String {
     }
 }
 
-fn print_stats<W: Write>(
-    out: &mut W,
-    pkt_count: u64,
-    byte_count: u64,
-    elapsed: Duration,
-    newline: bool,
-) {
+fn print_stats<W: Write>(out: &mut W, stats: &Stats, elapsed: Duration, newline: bool) {
+    let StatsSnapshot {
+        packets: pkt_count,
+        bytes: byte_count,
+        errors: err_count,
+    } = stats.snapshot();
+
     let elapsed_secs = elapsed.as_secs_f64();
     let pps = if elapsed_secs > 0.0 {
         (pkt_count as f64 / elapsed_secs) as u64
@@ -230,11 +231,12 @@ fn print_stats<W: Write>(
         out,
         MoveToColumn(0),
         Print(format!(
-            "{} packets | {} pps | {} | {} | {}",
+            "{} packets | {} pps | {} | {} | {} errors | {}",
             pkt_count.to_formatted_string(&Locale::en),
             pps.to_formatted_string(&Locale::en),
             ByteSize(byte_count).display().si(),
             format_bps(bps),
+            err_count.to_formatted_string(&Locale::en),
             FancyDuration(Duration::from_secs(elapsed.as_secs()))
         )),
         Clear(ClearType::UntilNewLine),
@@ -292,43 +294,36 @@ fn main() {
 
     let start_time = Instant::now();
 
-    let packets = Arc::new(AtomicU64::new(0));
-    let bytes = Arc::new(AtomicU64::new(0));
+    let stats = Arc::new(Stats::default());
     let running = Arc::new(AtomicBool::new(true));
 
-    let packets_clone = packets.clone();
-    let bytes_clone = bytes.clone();
+    let stats_clone = stats.clone();
     let running_clone = running.clone();
 
     ctrlc::set_handler(move || {
         running_clone.store(false, Ordering::SeqCst);
-        let pkt_count = packets_clone.load(Ordering::SeqCst);
-        let byte_count = bytes_clone.load(Ordering::SeqCst);
         let elapsed = start_time.elapsed();
-        print_stats(&mut stdout(), pkt_count, byte_count, elapsed, true);
+        print_stats(&mut stdout(), &stats_clone, elapsed, true);
         std::process::exit(0);
     })
     .unwrap();
 
     if !args.quiet {
-        let packets_display = packets.clone();
-        let bytes_display = bytes.clone();
+        let stats_display = stats.clone();
         let running_display = running.clone();
 
         thread::spawn(move || {
             while running_display.load(Ordering::SeqCst) {
-                let pkt_count = packets_display.load(Ordering::SeqCst);
-                let byte_count = bytes_display.load(Ordering::SeqCst);
                 let elapsed = start_time.elapsed();
-                print_stats(&mut stderr(), pkt_count, byte_count, elapsed, false);
+                print_stats(&mut stderr(), &stats_display, elapsed, false);
                 thread::sleep(Duration::from_millis(100));
             }
         });
     }
 
     if ipv6 {
-        build_ipv6_packet(args, proto, &packets, &bytes);
+        build_ipv6_packet(args, proto, &stats);
     } else {
-        build_ipv4_packet(args, proto, &packets, &bytes);
+        build_ipv4_packet(args, proto, &stats);
     }
 }

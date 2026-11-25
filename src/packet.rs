@@ -1,8 +1,6 @@
 use std::fs;
 use std::net::IpAddr;
 use std::sync::Arc;
-use std::sync::atomic::AtomicU64;
-use std::sync::atomic::Ordering;
 use std::thread;
 
 use internet_checksum::Checksum;
@@ -36,6 +34,7 @@ use crate::checksum::IncrementalChecksum;
 use crate::cli::Cli;
 use crate::random::random_public_ipv4;
 use crate::random::random_public_ipv6;
+use crate::stats::Stats;
 
 const MAX_PACKET_SIZE: u16 = u16::MAX;
 
@@ -145,13 +144,8 @@ fn build_udp_header(
     udp_header.set_checksum(0);
 }
 
-fn drive<F>(
-    cli: &Cli,
-    header_size: u16,
-    packets: &Arc<AtomicU64>,
-    bytes: &Arc<AtomicU64>,
-    mut send_one: F,
-) where
+fn drive<F>(cli: &Cli, header_size: u16, stats: &Arc<Stats>, mut send_one: F)
+where
     F: FnMut(&mut StdRng, &mut [u8]) -> Option<u64>,
 {
     let mut rng = StdRng::from_rng(&mut rand::rng());
@@ -181,8 +175,7 @@ fn drive<F>(
 
     loop {
         if let Some(sent_bytes) = send_one(&mut rng, &mut packet) {
-            packets.fetch_add(1, Ordering::SeqCst);
-            bytes.fetch_add(sent_bytes, Ordering::SeqCst);
+            stats.record_sent(sent_bytes);
         }
 
         if let Some(duration) = cli.duration {
@@ -236,12 +229,7 @@ fn set_ipv4_fragmentation(header: &mut MutableIpv4Packet, cli: &Cli) {
     header.set_fragment_offset(cli.fragoff.unwrap_or(0) / 8);
 }
 
-pub fn build_ipv4_packet(
-    cli: Cli,
-    proto: IpNextHeaderProtocol,
-    packets: &Arc<AtomicU64>,
-    bytes: &Arc<AtomicU64>,
-) {
+pub fn build_ipv4_packet(cli: Cli, proto: IpNextHeaderProtocol, stats: &Arc<Stats>) {
     let header_size = match proto {
         IpNextHeaderProtocols::Tcp => IP_HEADER_SIZE + TCP_HEADER_SIZE,
         IpNextHeaderProtocols::Udp => IP_HEADER_SIZE + UDP_HEADER_SIZE,
@@ -263,7 +251,7 @@ pub fn build_ipv4_packet(
 
     let mut checksummer = IncrementalChecksum::new();
 
-    drive(&cli, header_size, packets, bytes, |rng, packet| {
+    drive(&cli, header_size, stats, |rng, packet| {
         let data_size = random_data_size(&cli, rng);
 
         let src_ip = cli
@@ -357,6 +345,7 @@ pub fn build_ipv4_packet(
                 debug!("Failed to send packet to {:#?}: {}", ip_header, err);
             } else {
                 error!("Failed to send packet to {:#?}: {}", ip_header, err);
+                stats.record_error();
             }
             return None;
         }
@@ -387,12 +376,7 @@ impl<'a> Packet for RawPacket<'a> {
     }
 }
 
-pub fn build_ipv6_packet(
-    cli: Cli,
-    proto: IpNextHeaderProtocol,
-    packets: &Arc<AtomicU64>,
-    bytes: &Arc<AtomicU64>,
-) {
+pub fn build_ipv6_packet(cli: Cli, proto: IpNextHeaderProtocol, stats: &Arc<Stats>) {
     let header_size = match proto {
         IpNextHeaderProtocols::Tcp => IPV6_HEADER_SIZE + TCP_HEADER_SIZE,
         IpNextHeaderProtocols::Udp => IPV6_HEADER_SIZE + UDP_HEADER_SIZE,
@@ -428,7 +412,7 @@ pub fn build_ipv6_packet(
         );
     }
 
-    drive(&cli, header_size, packets, bytes, |rng, packet| {
+    drive(&cli, header_size, stats, |rng, packet| {
         let data_size = random_data_size(&cli, rng);
 
         let src_ip = cli
@@ -482,10 +466,9 @@ pub fn build_ipv6_packet(
         debug!("{:#?}", ip_header);
 
         if let Err(err) = tx.send_to(RawPacket(ip_header.packet()), IpAddr::V6(dst_ip)) {
-            if is_transient_send_error(&err) {
-                debug!("Failed to send packet to {}: {}", dst_ip, err);
-            } else {
-                error!("Failed to send packet to {}: {}", dst_ip, err);
+            debug!("Failed to send packet to {}: {}", dst_ip, err);
+            if !is_transient_send_error(&err) {
+                stats.record_error();
             }
             return None;
         }
